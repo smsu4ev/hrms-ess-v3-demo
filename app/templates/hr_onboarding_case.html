@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Onboarding - {{ case.name }}{% endblock %}
+{% block content %}
+<h2>Onboarding: {{ case.name }}</h2>
+<p class="muted">Joining date: {{ case.joining_date or '-' }} | Employee ID: {{ case.employee_id or '-' }}</p>
+<div class="formcard">
+  <h3>Checklist - {{ case.progress }}% complete</h3>
+  <div class="progress" style="margin-bottom:14px"><div class="bar" style="width:{{ case.progress }}%"></div></div>
+  {% for t in case.tasks %}
+  <div class="taskrow {% if t.is_done %}done{% endif %}">
+    <form method="post" class="inlineform">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="task_id" value="{{ t.id }}">
+      <button class="btn small {% if t.is_done %}success{% endif %}" type="submit">{% if t.is_done %}&#10003;{% else %}&#9675;{% endif %}</button>
+    </form>
+    <span class="tasklabel">{{ t.label }}</span>
+    {% if t.is_done %}<span class="muted">done {{ t.done_at.strftime('%Y-%m-%d') if t.done_at }}</span>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% if case.notes %}
+<div class="formcard"><h3>Notes</h3><p>{{ case.notes }}</p></div>
+{% endif %}
+{% endblock %}

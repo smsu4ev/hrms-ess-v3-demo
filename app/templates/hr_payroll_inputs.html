@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Payroll Inputs {{ run.period }}{% endblock %}
+{% block content %}
+<h2>Payroll Inputs - {{ run.period }} <span class="badge">{{ run.status }}</span></h2>
+<p class="muted">Locked runs cannot be changed. {% if not current_user.is_admin %}Input editing is admin-only.{% endif %}</p>
+
+<h3>Overtime Hours</h3>
+{% if current_user.is_admin and run.status != 'locked' %}
+<div class="formcard">
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="ot">
+  <label>Employee
+    <select name="user_id" required>
+      {% for e in employees %}<option value="{{ e.id }}">{{ e.name }} ({{ e.id }})</option>{% endfor %}
+    </select>
+  </label>
+  <label>Category <select name="category"><option value="normal">Normal</option><option value="night">Night</option><option value="restday">Rest-day</option></select></label>
+  <label>Hours <input type="number" step="0.5" name="hours" required min="0.5"></label>
+  <button class="btn primary" type="submit">Add OT</button>
+</form>
+</div>
+{% endif %}
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Employee</th><th>Category</th><th>Hours</th><th></th></tr>
+  {% for o in ot_rows %}
+  <tr><td>{{ o.user_id }}</td><td>{{ o.category }}</td><td>{{ o.hours }}</td>
+    <td>{% if current_user.is_admin and run.status != 'locked' %}
+      <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="del_ot"><input type="hidden" name="ot_id" value="{{ o.id }}">
+        <button class="btn small" type="submit">Delete</button></form>{% endif %}</td></tr>
+  {% else %}
+  <tr><td colspan="4" class="muted">No OT entries.</td></tr>
+  {% endfor %}
+</table>
+</div>
+
+<h3>Additions / Deductions / Arrears</h3>
+{% if current_user.is_admin and run.status != 'locked' %}
+<div class="formcard">
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="input">
+  <label>Employee
+    <select name="user_id" required>
+      {% for e in employees %}<option value="{{ e.id }}">{{ e.name }} ({{ e.id }})</option>{% endfor %}
+    </select>
+  </label>
+  <label>Type <select name="kind"><option value="addition">Addition</option><option value="deduction">Deduction</option></select></label>
+  <label>Label <input type="text" name="label" required maxlength="80" placeholder="e.g. Eid Bonus, LOP, Mobile Deduction"></label>
+  <label>Amount (AED) <input type="number" step="0.01" name="amount" value="0"></label>
+  <label>LOP Days (only when label = LOP) <input type="number" step="0.5" name="days"></label>
+  <label>Component (optional)
+    <select name="component"><option value="">- free label -</option>
+      {% for c in comps %}<option value="{{ c.code }}">{{ c.code }} - {{ c.name }}</option>{% endfor %}
+    </select>
+  </label>
+  <label><input type="checkbox" name="is_arrears"> This is arrears (prior-period correction)</label>
+  <label>Original Period (arrears) <input type="text" name="original_period" pattern="\d{4}-\d{2}" placeholder="2026-09"></label>
+  <label>Note <input type="text" name="note" maxlength="200"></label>
+  <button class="btn primary" type="submit">Add Input</button>
+</form>
+</div>
+{% endif %}
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Employee</th><th>Type</th><th>Label</th><th class="r">Amount</th><th>Arrears</th><th></th></tr>
+  {% for i in inputs %}
+  <tr><td>{{ i.user_id }}</td><td>{{ i.kind }}</td><td>{{ i.label }}</td>
+      <td class="r">{{ "%.2f"|format(i.amount) }}</td>
+      <td>{% if i.is_arrears %}Yes ({{ i.original_period or '?' }}){% else %}-{% endif %}</td>
+      <td>{% if current_user.is_admin and run.status != 'locked' %}
+        <form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="del_input"><input type="hidden" name="input_id" value="{{ i.id }}">
+          <button class="btn small" type="submit">Delete</button></form>{% endif %}</td></tr>
+  {% else %}
+  <tr><td colspan="6" class="muted">No manual inputs.</td></tr>
+  {% endfor %}
+</table>
+</div>
+<p><a class="btn" href="{{ url_for('payroll.run_detail', run_id=run.id) }}">Back to Run</a></p>
+{% endblock %}

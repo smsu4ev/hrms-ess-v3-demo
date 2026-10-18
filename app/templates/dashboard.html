@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h2>{% if current_user.photo_path %}<img src="{{ url_for('docs.photo', uid=current_user.id) }}" alt="" style="height:48px;width:48px;object-fit:cover;border-radius:50%;vertical-align:middle;margin-right:8px">{% endif %}Welcome, {{ current_user.name }}</h2>
+<p class="muted">{{ current_user.designation }} - {{ current_user.department }} | ID: {{ current_user.id }}</p>
+
+<div class="tiles">
+  <a class="tile" href="{{ url_for('views.leave') }}">
+    <span class="t-ico">&#128197;</span><span class="t-lbl">Apply Leave</span>
+    <div class="t-sub">Annual, sick, maternity & more (UAE)</div>
+  </a>
+  <a class="tile" href="{{ url_for('views.attendance') }}">
+    <span class="t-ico">&#128336;</span><span class="t-lbl">My Attendance</span>
+    <div class="t-sub">Monthly view</div>
+  </a>
+  <a class="tile" href="{{ url_for('views.regularisation') }}">
+    <span class="t-ico">&#9998;</span><span class="t-lbl">Regularisation</span>
+    <div class="t-sub">Correct missed punches</div>
+  </a>
+  <a class="tile" href="{{ url_for('views.payslips') }}">
+    <span class="t-ico">&#128179;</span><span class="t-lbl">Payslips</span>
+    <div class="t-sub">Last 6 months</div>
+  </a>
+  {% if current_user.is_manager %}
+  <a class="tile" href="{{ url_for('views.approvals') }}">
+    <span class="t-ico">&#9989;</span><span class="t-lbl">Approvals</span>
+    <div class="t-sub">Leave & regularisation</div>
+    {% if approvals_pending %}<span class="t-badge">{{ approvals_pending }}</span>{% endif %}
+  </a>
+  {% endif %}
+  {% if current_user.is_admin %}
+  <a class="tile admin-tile" href="{{ url_for('hrms.employees') }}">
+    <span class="t-ico">&#128101;</span><span class="t-lbl">Employee Central</span>
+    <div class="t-sub">HR records & master data</div>
+  </a>
+  <a class="tile admin-tile" href="{{ url_for('hrms.compliance') }}">
+    <span class="t-ico">&#9878;</span><span class="t-lbl">Compliance</span>
+    <div class="t-sub">UAE labour law overview</div>
+  </a>
+  {% endif %}
+</div>
+
+<div class="cards">
+  <div class="card"><div class="num">{{ present_days }}</div><div class="lbl">Days present this month</div></div>
+  <div class="card"><div class="num">{{ pending_leaves }}</div><div class="lbl">Pending leave requests</div></div>
+  <div class="card"><div class="num">{{ open_grievances }}</div><div class="lbl">Open grievances</div></div>
+  {% if current_user.is_manager %}
+  <div class="card warn"><div class="num">{{ approvals_pending }}</div><div class="lbl">Approvals waiting</div></div>
+  {% endif %}
+  {% if current_user.is_admin and expiring_docs %}
+  <div class="card danger-card"><div class="num">{{ expiring_docs|length }}</div><div class="lbl">Documents expiring soon</div></div>
+  {% endif %}
+</div>
+{% if current_user.is_admin and expiring_docs %}
+<h3>Visa / Passport / Emirates ID Expiries (next 30 days)</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Employee</th><th>Document</th><th>Expiry Date</th><th>Days Left</th></tr>
+  {% for e in expiring_docs %}
+  <tr>
+    <td><a href="{{ url_for('hrms.employee_detail', uid=e.user.id) }}">{{ e.user.name }} ({{ e.user.id }})</a></td>
+    <td>{{ e.doc|title }}</td><td>{{ e.date }}</td>
+    <td><span class="badge {% if e.days_left < 0 %}rejected{% elif e.days_left <= 10 %}pending{% else %}late{% endif %}">{{ e.days_left }} days</span></td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+<h3>Leave Balances</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Leave Type</th><th>Entitled</th><th>Used</th><th>Remaining</th></tr>
+  {% for b in balances %}
+  <tr><td>{{ b.leave_type|title }}</td><td>{{ b.entitled }}</td><td>{{ b.used }}</td><td>{{ b.entitled - b.used }}</td></tr>
+  {% else %}
+  <tr><td colspan="4" class="muted">No balances set up yet.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

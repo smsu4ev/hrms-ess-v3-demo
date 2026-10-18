@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Salary - {{ user.id }}{% endblock %}
+{% block content %}
+<h2>Salary Structure - {{ user.name }} ({{ user.id }})</h2>
+{% if current_user.is_admin %}
+<div class="formcard">
+<h3>Set Component Amounts</h3>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Effective From <input type="date" name="effective_from" value="{{ today.isoformat() }}" required></label>
+  <label>Note <input type="text" name="note" maxlength="200" placeholder="e.g. increment effective Oct 2026"></label>
+  <div class="tbl-wrap">
+  <table class="tbl">
+    <tr><th>Component</th><th>Type</th><th>Current (AED)</th><th>New Amount (AED)</th></tr>
+    {% for c in comps %}
+    <tr>
+      <td><strong>{{ c.code }}</strong> - {{ c.name }}</td>
+      <td>{{ c.kind }}</td>
+      <td class="r">{{ "%.2f"|format(current.get(c.code, 0)) }}</td>
+      <td><input type="number" step="0.01" name="amt_{{ c.code }}" value="{{ current.get(c.code, 0) }}" style="width:10em"></td>
+    </tr>
+    {% endfor %}
+  </table>
+  </div>
+  <button class="btn primary" type="submit">Save Assignments</button>
+</form>
+</div>
+{% else %}
+<h3>Current Salary Structure</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Component</th><th class="r">Amount (AED)</th></tr>
+  {% for c in comps %}
+  <tr><td><strong>{{ c.code }}</strong> - {{ c.name }}</td><td class="r">{{ "%.2f"|format(current.get(c.code, 0)) }}</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+<h3>Assignment History</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Effective</th><th>Component</th><th class="r">Amount</th><th>Note</th><th>By</th></tr>
+  {% for h in history %}
+  <tr><td>{{ h.effective_from }}</td><td>{{ h.component.code if h.component else h.component_id }}</td>
+      <td class="r">{{ "%.2f"|format(h.amount) }}</td><td>{{ h.note or '-' }}</td><td>{{ h.created_by or '-' }}</td></tr>
+  {% else %}
+  <tr><td colspan="5" class="muted">No assignments yet.</td></tr>
+  {% endfor %}
+</table>
+</div>
+<p><a class="btn" href="{{ url_for('hrms.employee_detail', uid=user.id) }}">Back to 360</a></p>
+{% endblock %}

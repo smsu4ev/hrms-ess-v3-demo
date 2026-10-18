@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}HRMS{% endblock %} - {{ company_name }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+{% if current_user.is_authenticated %}
+<header class="topbar">
+  <button class="hamburger" id="navToggle" aria-label="Open navigation menu" aria-expanded="false">&#9776;</button>
+  <div class="brand"><span class="logo-dot"></span><span class="brand-name">{{ company_name }}</span> <span class="trade">{{ trade_name }}</span></div>
+  <div class="userbox">
+    <span class="uname">{{ current_user.name }} <span class="uid">({{ current_user.id }})</span></span>
+    <span class="badge {{ current_user.role }}">{{ current_user.role }}</span>
+    <form method="post" action="{{ url_for('auth.logout') }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn small ghost">Logout</button>
+    </form>
+  </div>
+</header>
+<div class="navscrim" id="navScrim" aria-hidden="true"></div>
+<div class="layout">
+  <nav class="sidebar" id="sidebar" aria-label="Main navigation">
+    <a href="{{ url_for('views.dashboard') }}"><span class="nav-ico">&#8962;</span><span class="nav-txt">Dashboard</span></a>
+    <a href="{{ url_for('views.leave') }}"><span class="nav-ico">&#128197;</span><span class="nav-txt">Leave</span></a>
+    <a href="{{ url_for('views.attendance') }}"><span class="nav-ico">&#128336;</span><span class="nav-txt">Attendance</span></a>
+    <a href="{{ url_for('views.regularisation') }}"><span class="nav-ico">&#9998;</span><span class="nav-txt">Regularisation</span></a>
+    <a href="{{ url_for('views.payslips') }}"><span class="nav-ico">&#128179;</span><span class="nav-txt">Payslips</span></a>
+    <a href="{{ url_for('views.grievances') }}"><span class="nav-ico">&#128172;</span><span class="nav-txt">Grievances</span></a>
+    <a href="{{ url_for('views.evaluations') }}"><span class="nav-ico">&#9733;</span><span class="nav-txt">My Evaluations</span></a>
+    <a href="{{ url_for('views.profile') }}"><span class="nav-ico">&#128100;</span><span class="nav-txt">My Profile</span></a>
+    <a href="{{ url_for('docs.my_documents') }}"><span class="nav-ico">&#128196;</span><span class="nav-txt">My Documents</span></a>
+    <a href="{{ url_for('views.my_gratuity') }}"><span class="nav-ico">&#128178;</span><span class="nav-txt">EOS Gratuity</span></a>
+    {% if current_user.is_manager %}
+    <div class="navhead">Manager</div>
+    <a href="{{ url_for('views.approvals') }}"><span class="nav-ico">&#9989;</span><span class="nav-txt">Leave Approvals</span></a>
+    <a href="{{ url_for('views.regularisation_approvals') }}"><span class="nav-ico">&#9998;</span><span class="nav-txt">Regularisation Approvals</span></a>
+    <a href="{{ url_for('views.evaluations_manage') }}"><span class="nav-ico">&#9733;</span><span class="nav-txt">Evaluations</span></a>
+    <a href="{{ url_for('views.grievance_inbox') }}"><span class="nav-ico">&#128172;</span><span class="nav-txt">Grievance Inbox</span></a>
+    {% endif %}
+    {% if current_user.is_admin or can_view_salary %}
+    <div class="navhead">Payroll</div>
+    <a href="{{ url_for('payroll.runs') }}"><span class="nav-ico">&#128176;</span><span class="nav-txt">Payroll Runs</span></a>
+    <a href="{{ url_for('payroll.loans') }}"><span class="nav-ico">&#128179;</span><span class="nav-txt">Loans & Advances</span></a>
+    <a href="{{ url_for('payroll.components') }}"><span class="nav-ico">&#128202;</span><span class="nav-txt">Salary Components</span></a>
+    <a href="{{ url_for('payroll.ot_rules') }}"><span class="nav-ico">&#9200;</span><span class="nav-txt">OT Rate Rules</span></a>
+    <a href="{{ url_for('payroll.companies') }}"><span class="nav-ico">&#127970;</span><span class="nav-txt">Visa Companies</span></a>
+    <a href="{{ url_for('payroll.wps') }}"><span class="nav-ico">&#8681;</span><span class="nav-txt">WPS Files</span></a>
+    <a href="{{ url_for('payroll.letters') }}"><span class="nav-ico">&#9993;</span><span class="nav-txt">Letters</span></a>
+    <a href="{{ url_for('docs.hr_documents') }}"><span class="nav-ico">&#128451;</span><span class="nav-txt">Document Vault</span></a>
+    {% endif %}
+    {% if current_user.is_admin %}
+    <div class="navhead">HRMS Admin</div>
+    <a href="{{ url_for('hrms.employees') }}"><span class="nav-ico">&#128101;</span><span class="nav-txt">Employee Central</span></a>
+    <a href="{{ url_for('hrms.compliance') }}"><span class="nav-ico">&#9878;</span><span class="nav-txt">Compliance</span></a>
+    <a href="{{ url_for('hrms.gratuity_calc') }}"><span class="nav-ico">&#128178;</span><span class="nav-txt">Gratuity Calculator</span></a>
+    <a href="{{ url_for('hrms.wps_export') }}"><span class="nav-ico">&#8681;</span><span class="nav-txt">WPS Export (Legacy simple)</span></a>
+    <a href="{{ url_for('hrms.recruitment') }}"><span class="nav-ico">&#128203;</span><span class="nav-txt">Recruitment</span></a>
+    <a href="{{ url_for('hrms.onboarding') }}"><span class="nav-ico">&#127891;</span><span class="nav-txt">Onboarding</span></a>
+    <a href="{{ url_for('admin.users') }}"><span class="nav-ico">&#128100;</span><span class="nav-txt">Manage Users</span></a>
+    <a href="{{ url_for('admin.audit') }}"><span class="nav-ico">&#128221;</span><span class="nav-txt">Audit Log</span></a>
+    <a href="{{ url_for('admin.attendance_import') }}"><span class="nav-ico">&#8681;</span><span class="nav-txt">Import Attendance</span></a>
+    <a href="{{ url_for('admin.outbox') }}"><span class="nav-ico">&#128241;</span><span class="nav-txt">WhatsApp Outbox</span></a>
+    {% endif %}
+  </nav>
+  <main class="content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for cat, msg in messages %}
+        <div class="flash {{ cat }}">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<nav class="bottomnav" id="bottomnav" aria-label="Quick navigation">
+  <a href="{{ url_for('views.dashboard') }}"><span class="bnav-ico">&#8962;</span><span class="bnav-txt">Home</span></a>
+  <a href="{{ url_for('views.leave') }}"><span class="bnav-ico">&#128197;</span><span class="bnav-txt">Leave</span></a>
+  <a href="{{ url_for('views.attendance') }}"><span class="bnav-ico">&#128336;</span><span class="bnav-txt">Attend.</span></a>
+  {% if current_user.is_manager %}
+  <a href="{{ url_for('views.approvals') }}"><span class="bnav-ico">&#9989;</span><span class="bnav-txt">Approvals</span></a>
+  {% else %}
+  <a href="{{ url_for('views.payslips') }}"><span class="bnav-ico">&#128179;</span><span class="bnav-txt">Payslips</span></a>
+  {% endif %}
+  <a href="{{ url_for('views.profile') }}"><span class="bnav-ico">&#128100;</span><span class="bnav-txt">Profile</span></a>
+</nav>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% else %}
+<main class="authpage">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat, msg in messages %}
+      <div class="flash {{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  {% block auth %}{% endblock %}
+</main>
+{% endif %}
+</body>
+</html>

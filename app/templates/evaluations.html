@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}My Evaluations{% endblock %}
+{% block content %}
+<h2>My Performance Evaluations</h2>
+{% for e in items %}
+<div class="formcard">
+  <h3>Period: {{ e.period }} <span class="badge done">Overall: {{ e.overall }}/5</span></h3>
+  <div class="tbl-wrap"><table class="tbl">
+    <tr><th>Criterion</th><th>Rating</th><th>Comment</th></tr>
+    {% for s in e.scores %}
+    <tr><td>{{ s.criterion }}</td><td>{{ s.rating }}/5</td>
+        <td>{{ s.comment }}{% if s.note %}<br><span class="muted">{{ s.note }}</span>{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% if e.remarks %}<p><strong>Remarks:</strong> {{ e.remarks }}</p>{% endif %}
+  {% if e.acknowledged %}
+  <p class="muted">Acknowledged by you.</p>
+  {% else %}
+  <form method="post" action="{{ url_for('views.acknowledge_evaluation', eid=e.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn primary" type="submit">Acknowledge</button>
+  </form>
+  {% endif %}
+</div>
+{% else %}
+<p class="muted">No evaluations yet.</p>
+{% endfor %}
+{% endblock %}

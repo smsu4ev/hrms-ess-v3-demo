@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Payroll {{ run.period }}{% endblock %}
+{% block content %}
+<h2>Payroll Run {{ run.period }} <span class="badge {{ 'approved' if run.status=='approved' else 'pending' }}">{{ run.status.replace('_',' ') }}</span></h2>
+<div class="cards">
+  <div class="card"><div class="num">{{ totals.count }}</div><div class="lbl">Employees</div></div>
+  <div class="card"><div class="num">AED {{ "%.2f"|format(totals.gross) }}</div><div class="lbl">Gross</div></div>
+  <div class="card"><div class="num">AED {{ "%.2f"|format(totals.deductions) }}</div><div class="lbl">Deductions</div></div>
+  <div class="card"><div class="num">AED {{ "%.2f"|format(totals.net) }}</div><div class="lbl">Net</div></div>
+</div>
+<p>
+  <a class="btn small" href="{{ url_for('payroll.run_inputs', run_id=run.id) }}">Inputs (OT / Additions / Deductions / Arrears)</a>
+  <a class="btn small" href="{{ url_for('payroll.run_review', run_id=run.id) }}">Review: Exceptions &amp; Insights</a>
+  {% if current_user.is_admin %}
+  <form method="post" action="{{ url_for('payroll.run_recalc', run_id=run.id) }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn small" type="submit" {{ 'disabled' if run.status=='locked' }}>Recalculate</button>
+  </form>
+  <form method="post" action="{{ url_for('payroll.run_submit', run_id=run.id) }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn small" type="submit" {{ 'disabled' if run.status!='draft' }}>Submit for Review</button>
+  </form>
+  <form method="post" action="{{ url_for('payroll.run_lock', run_id=run.id) }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn small" type="submit" {{ 'disabled' if run.status=='locked' or run.status=='approved' }}>Lock</button>
+  </form>
+  <form method="post" action="{{ url_for('payroll.run_approve', run_id=run.id) }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn small primary" type="submit" {{ 'disabled' if run.status!='locked' }}>Approve</button>
+  </form>
+  <form method="post" action="{{ url_for('payroll.run_unlock', run_id=run.id) }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn small" type="submit" {{ 'disabled' if run.status not in ['locked','in_review'] }}>Unlock (audited)</button>
+  </form>
+  {% endif %}
+</p>
+{% if run.status in ['locked','approved'] %}
+<p><a class="btn small primary" href="{{ url_for('payroll.wps', period=run.period) }}">WPS Files (per visa company)</a></p>
+{% endif %}
+<h3>Payroll Register</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Employee</th><th>Payable Days</th><th>Basic Earned</th><th class="r">Gross</th><th class="r">Deductions</th><th class="r">Net</th></tr>
+  {% for l in lines %}
+  <tr>
+    <td>{{ users[l.user_id].name if l.user_id in users else l.user_id }} ({{ l.user_id }})</td>
+    <td>{{ "%.1f"|format(l.payable_days) }}</td>
+    <td class="r">{{ "%.2f"|format(l.basic_earned) }}</td>
+    <td class="r">{{ "%.2f"|format(l.gross) }}</td>
+    <td class="r">{{ "%.2f"|format(l.total_deductions) }}</td>
+    <td class="r"><strong>{{ "%.2f"|format(l.net) }}</strong></td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

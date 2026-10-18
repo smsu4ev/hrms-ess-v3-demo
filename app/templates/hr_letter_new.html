@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Generate Letter{% endblock %}
+{% block content %}
+<h2>Generate Letter</h2>
+<p class="muted">Letters with salary figures (basic_salary / monthly_salary) require salary
+visibility, assigned by the HR Manager.</p>
+<div class="formcard">
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Employee
+    <select name="user_id" required>
+      {% for e in employees %}<option value="{{ e.id }}">{{ e.name }} ({{ e.id }}) - {{ e.designation or '' }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Template
+    <select name="template_id" required>
+      {% for t in templates %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
+    </select>
+  </label>
+  <button class="btn primary" type="submit">Generate</button>
+  <a class="btn" href="{{ url_for('payroll.letters') }}">Cancel</a>
+</form>
+</div>
+{% endblock %}

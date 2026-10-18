@@ -1,0 +1,15 @@
+[Unit]
+Description=Al-Ameen HRMS+ESS v2 (gunicorn)
+After=network.target
+
+[Service]
+User=hrms
+Group=hrms
+WorkingDirectory=/opt/hrms-ess/hrms-ess-v2
+EnvironmentFile=/etc/hrms-ess.env
+ExecStart=/opt/hrms-ess/hrms-ess-v2/venv/bin/gunicorn -w 3 -b 127.0.0.1:8000 run:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

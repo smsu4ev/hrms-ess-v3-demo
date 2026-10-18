@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}New Evaluation{% endblock %}
+{% block content %}
+<h2>Performance Evaluation - {{ target.name }} ({{ target.id }})</h2>
+<p class="muted">{{ target.designation }} - {{ target.department }}</p>
+<form method="post" class="formcard">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Evaluation period <input type="text" name="period" placeholder="e.g. 2026 H2" maxlength="40"></label>
+  {% for c in criteria %}
+  <div class="evalrow">
+    <strong>{{ loop.index }}. {{ c }}</strong>
+    <div class="evalinputs">
+      <label>Rating (1-5)
+        <select name="rating_{{ loop.index0 }}" required>
+          <option value="">--</option>
+          {% for r in [1,2,3,4,5] %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Comment (choose)
+        <select name="comment_{{ loop.index0 }}">
+          {% for o in options %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Additional note <input type="text" name="comment_text_{{ loop.index0 }}" maxlength="500"></label>
+    </div>
+  </div>
+  {% endfor %}
+  <label>Overall remarks <textarea name="remarks" rows="3"></textarea></label>
+  <button class="btn primary" type="submit">Save Evaluation</button>
+</form>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Gratuity Calculator{% endblock %}
+{% block content %}
+<h2>End-of-Service Gratuity Calculator</h2>
+<p class="muted">Federal Decree-Law 33/2021: daily basic = monthly basic / 30; 21 days/year for the
+   first 5 years, 30 days/year beyond; pro-rated for partial years; capped at 2 years' total
+   wage. Resignation scale: &lt;1 yr = 0, 1-3 yrs = 1/3, 3-5 yrs = 2/3, 5+ yrs = full.
+   Assumptions are documented in the code (app/uae.py) - verify against current law.</p>
+<div class="twocol">
+<div>
+<div class="formcard">
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Employee (optional - fills joining date &amp; basic)
+    <select name="employee_id">
+      <option value="">- manual entry -</option>
+      {% for e in employees %}
+      <option value="{{ e.id }}" {% if form.employee_id == e.id %}selected{% endif %}>{{ e.name }} ({{ e.id }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Basic Monthly Salary (AED) <input type="number" step="0.01" name="basic" value="{{ form.basic }}"></label>
+  <label>Joining Date <input type="date" name="join" value="{{ form.join }}"></label>
+  <label>Last Working Date <input type="date" name="last" value="{{ form.last }}"></label>
+  <label>Separation Type
+    <select name="separation">
+      <option value="employer" {% if form.separation == 'employer' %}selected{% endif %}>Termination by employer / contract expiry (full)</option>
+      <option value="resignation" {% if form.separation == 'resignation' %}selected{% endif %}>Employee resignation (scaled)</option>
+    </select>
+  </label>
+  <button class="btn primary" type="submit">Calculate</button>
+</form>
+</div>
+</div>
+<div>
+{% if result %}
+<div class="formcard">
+  <h3>Result - {{ result.who }}</h3>
+  <dl class="kv">
+    <dt>Last working date</dt><dd>{{ result.last_working }}</dd>
+    <dt>Basic monthly salary</dt><dd>AED {{ "%.2f"|format(result.basic) }}</dd>
+    <dt>Service</dt><dd>{{ result.years_of_service }} years ({{ result.service_days }} days)</dd>
+    <dt>Daily basic wage</dt><dd>AED {{ "%.2f"|format(result.daily_wage) }} (basic / 30)</dd>
+    <dt>Accrued days</dt><dd>{{ result.accrual_days }}</dd>
+    <dt>Base amount</dt><dd>AED {{ "%.2f"|format(result.base_amount) }}</dd>
+    <dt>Separation</dt><dd>{{ result.separation_type|title }} (x{{ result.multiplier }})</dd>
+    <dt>Cap (2 years' wage)</dt><dd>AED {{ "%.2f"|format(result.cap) }}{% if result.capped %} - applied{% endif %}</dd>
+  </dl>
+  <div class="cards">
+    <div class="card"><div class="num">AED {{ "%.2f"|format(result.amount) }}</div><div class="lbl">Gratuity payable</div></div>
+  </div>
+  <p class="muted">Logged to the audit trail. This calculator is a documented simplification - confirm
+     the final figure with HR/legal before payment.</p>
+</div>
+{% else %}
+<p class="muted">Pick an employee or enter values manually, then Calculate.</p>
+{% endif %}
+</div>
+</div>
+{% endblock %}

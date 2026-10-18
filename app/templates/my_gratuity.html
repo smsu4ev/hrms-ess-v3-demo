@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}My End-of-Service Estimate{% endblock %}
+{% block content %}
+<h2>My End-of-Service Estimate</h2>
+{% if est %}
+<div class="formcard">
+  <p class="muted">This is an <strong>estimate only</strong> for your information. It uses your basic
+     salary of <strong>AED {{ current_user.basic_salary }}</strong> as of today, on an
+     employer-termination basis. Your final settlement is calculated and approved by HR
+     under Federal Decree-Law 33/2021.</p>
+  <dl class="kv">
+    <dt>Years of service</dt><dd>{{ est.years_of_service }} ({{ est.service_days }} days)</dd>
+    <dt>Daily basic wage</dt><dd>AED {{ "%.2f"|format(est.daily_wage) }} (basic / 30)</dd>
+    <dt>Accrued days</dt><dd>{{ est.accrual_days }} days (21/year for first 5 years, 30/year beyond)</dd>
+    <dt>Base amount</dt><dd>AED {{ "%.2f"|format(est.base_amount) }}</dd>
+    <dt>Cap (2 years' total wage)</dt><dd>AED {{ "%.2f"|format(est.cap) }}</dd>
+  </dl>
+  <div class="cards">
+    <div class="card"><div class="num">AED {{ "%.2f"|format(est.amount) }}</div><div class="lbl">Estimated gratuity</div></div>
+  </div>
+  <p class="muted">Rules: no gratuity for service of one year or less; resignation cases use the
+     1/3 - 2/3 - full scale; capped at 2 years' total wage. This estimate shows the
+     employer-termination basis only.</p>
+</div>
+{% else %}
+<div class="formcard">
+  <p class="muted">An estimate needs your joining date and basic salary. Please contact HR to
+     have them recorded in Employee Central.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block auth %}
+<div class="authcard">
+  <h1>{{ company_name }}</h1>
+  <p class="sub">{{ trade_name }} - Employee Self-Service</p>
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Employee ID
+      <input type="text" name="username" autocomplete="username" required autofocus>
+    </label>
+    <label>Password
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <button type="submit" class="btn primary wide">Login</button>
+  </form>
+  <p class="hint">First login? Your initial password is your date of birth as DDMMYYYY.<br>
+  You will be asked to change it immediately.</p>
+</div>
+{% endblock %}

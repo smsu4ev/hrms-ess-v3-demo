@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{% if user %}Edit {{ user.id }}{% else %}Add Employee{% endif %}{% endblock %}
+{% block content %}
+<h2>{% if user %}Edit Employee {{ user.id }} - {{ user.name }}{% else %}Add Employee{% endif %}</h2>
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+<div class="formcard">
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if not user %}
+  <label>Employee ID <input type="text" name="employee_id" required></label>
+  {% endif %}
+  <label>Full Name <input type="text" name="name" value="{{ user.name if user }}" required></label>
+  <label>Designation <input type="text" name="designation" value="{{ user.designation if user }}"></label>
+  <label>Department <input type="text" name="department" value="{{ user.department if user }}"></label>
+  <label>Reporting Manager (Employee ID)
+    <select name="reporting_manager">
+      <option value="">- none -</option>
+      {% for m in managers %}
+      <option value="{{ m.id }}" {% if user and user.reporting_manager == m.id %}selected{% endif %}>{{ m.name }} ({{ m.id }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Joining Date <input type="date" name="joining_date" value="{{ user.joining_date if user and user.joining_date }}"></label>
+  <label>Employment Status
+    <select name="employment_status">
+      {% for s in statuses %}
+      <option value="{{ s }}" {% if user and user.employment_status == s %}selected{% endif %}>{{ s|title }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Nationality <input type="text" name="nationality" value="{{ user.nationality if user }}"></label>
+  <label>Visa Expiry Date <input type="date" name="visa_expiry_date" value="{{ user.visa_expiry_date if user and user.visa_expiry_date }}"></label>
+  <label>Passport Expiry Date <input type="date" name="passport_expiry_date" value="{{ user.passport_expiry_date if user and user.passport_expiry_date }}"></label>
+  <label>Emirates ID Expiry Date <input type="date" name="emirates_id_expiry_date" value="{{ user.emirates_id_expiry_date if user and user.emirates_id_expiry_date }}"></label>
+  <label>Emirates ID No. <input type="text" name="emirates_id_no" value="{{ user.emirates_id_no if user }}" placeholder="784-....-.......-." maxlength="40"></label>
+  <label>Email <input type="email" name="email" value="{{ user.email if user }}"></label>
+  <label>Mobile <input type="text" name="mobile" value="{{ user.mobile if user }}"></label>
+  <label>Phone (WhatsApp) <input type="text" name="phone" value="{{ user.phone if user }}"></label>
+  <label>Passport No. <input type="text" name="passport_no" value="{{ user.passport_no if user }}"></label>
+  <label>Bank IBAN (WPS) <input type="text" name="iban" value="{{ user.iban if user }}" placeholder="AE07..." maxlength="34"></label>
+  <label>Bank Name <input type="text" name="bank_name" value="{{ user.bank_name if user }}"></label>
+  <label>Visa Company
+    <select name="visa_company_id">
+      <option value="">- none -</option>
+      {% for c in companies %}
+      <option value="{{ c.id }}" {% if user and user.visa_company_id == c.id %}selected{% endif %}>{{ c.code }} - {{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Exit Date (if left) <input type="date" name="exit_date" value="{{ user.exit_date if user and user.exit_date }}"></label>
+  {% if current_user.is_admin %}
+  <label>Basic Salary <input type="number" step="0.01" name="basic_salary" value="{{ user.basic_salary if user else 0 }}"></label>
+  <label>Monthly Salary <input type="number" step="0.01" name="monthly_salary" value="{{ user.monthly_salary if user else 0 }}"></label>
+  {% endif %}
+  <button class="btn primary" type="submit">{% if user %}Save Changes{% else %}Create Employee{% endif %}</button>
+  <a class="btn" href="{{ url_for('hrms.employees') }}">Cancel</a>
+</form>
+</div>
+{% if user %}<p class="muted">Every changed field is written to the audit trail (old value -> new value).</p>{% endif %}
+{% endblock %}

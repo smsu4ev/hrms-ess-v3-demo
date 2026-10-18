@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Grievance Inbox{% endblock %}
+{% block content %}
+<h2>Grievance Inbox (Confidential)</h2>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>#</th><th>Employee</th><th>Category</th><th>Subject</th><th>Status</th><th>Action</th></tr>
+  {% for g in items %}
+  {% set u = users.get(g.user_id) %}
+  <tr>
+    <td>{{ g.id }}</td>
+    <td>{% if g.is_anonymous %}<em>Anonymous</em>{% else %}{{ u.name if u else g.user_id }} ({{ g.user_id }}){% endif %}</td>
+    <td>{{ g.category }}</td>
+    <td><a href="{{ url_for('views.grievance_detail', gid=g.id) }}">{{ g.subject }}</a></td>
+    <td><span class="badge {{ g.status }}">{{ g.status.replace('_',' ') }}</span></td>
+    <td>
+      <form method="post" class="inlineform">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="gid" value="{{ g.id }}">
+        <select name="status">
+          {% for s in ['submitted','under_review','in_progress','resolved','closed'] %}
+          <option value="{{ s }}" {% if g.status==s %}selected{% endif %}>{{ s.replace('_',' ')|title }}</option>
+          {% endfor %}
+        </select>
+        <input type="text" name="resolution" placeholder="Resolution note" value="{{ g.resolution or '' }}" size="24">
+        <button class="btn small" type="submit">Update</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" class="muted">No grievances.</td></tr>
+  {% endfor %}
+</table></div>
+{% endblock %}

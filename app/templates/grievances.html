@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Grievances{% endblock %}
+{% block content %}
+<h2>My Grievances</h2>
+<div class="twocol">
+<div>
+<h3>Raise a Grievance</h3>
+<form method="post" class="formcard">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Category
+    <select name="category" required>
+      {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Subject <input type="text" name="subject" maxlength="200" required></label>
+  <label>Description <textarea name="description" rows="4" required></textarea></label>
+  <label class="check"><input type="checkbox" name="anonymous"> Submit anonymously</label>
+  <button class="btn primary" type="submit">Submit Grievance</button>
+</form>
+<p class="muted">All grievances are treated confidentially by HR.</p>
+</div>
+<div>
+<h3>Submitted</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>#</th><th>Subject</th><th>Category</th><th>Status</th><th></th></tr>
+  {% for g in items %}
+  <tr><td>{{ g.id }}</td><td>{{ g.subject }}</td><td>{{ g.category }}</td>
+      <td><span class="badge {{ g.status }}">{{ g.status.replace('_',' ') }}</span></td>
+      <td><a class="btn small" href="{{ url_for('views.grievance_detail', gid=g.id) }}">View</a></td></tr>
+  {% else %}
+  <tr><td colspan="5" class="muted">No grievances submitted.</td></tr>
+  {% endfor %}
+</table></div>
+</div>
+</div>
+{% endblock %}

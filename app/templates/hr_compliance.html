@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}UAE Compliance{% endblock %}
+{% block content %}
+<h2>UAE Compliance Dashboard</h2>
+<p class="muted">Federal Decree-Law 33/2021 overview for HR. Figures are estimates - verify against
+   the current law before any payment or filing.</p>
+
+<div class="cards">
+  <div class="card danger-card"><div class="num">{{ expiries|length }}</div><div class="lbl">Documents expiring within 60 days</div></div>
+  <div class="card warn"><div class="num">{{ probation|length }}</div><div class="lbl">Probation ending within 30 days</div></div>
+  <div class="card"><div class="num">AED {{ "%.2f"|format(liability) }}</div><div class="lbl">Gratuity liability ({{ liability_count }} staff, est.)</div></div>
+</div>
+
+<h3>Document Expiries (next 60 days) - Visa, Passport, Emirates ID</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Employee</th><th>Document</th><th>Expiry Date</th><th>Days Left</th></tr>
+  {% for e in expiries %}
+  <tr>
+    <td><a href="{{ url_for('hrms.employee_detail', uid=e.user.id) }}">{{ e.user.name }} ({{ e.user.id }})</a></td>
+    <td>{{ e.doc|title }}</td><td>{{ e.date }}</td>
+    <td><span class="badge {% if e.days_left < 0 %}rejected{% elif e.days_left <= 20 %}pending{% else %}late{% endif %}">{{ e.days_left }} days</span></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="muted">No expiries in the next 60 days.</td></tr>
+  {% endfor %}
+</table>
+</div>
+
+<h3>{{ insight_label }}</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Flag</th><th>Subject</th><th>Severity</th></tr>
+  {% for text, subject, sev in insights %}
+  <tr><td>{{ text }}</td><td>{{ subject }}</td>
+      <td><span class="badge {{ 'rejected' if sev=='high' else 'pending' }}">{{ sev }}</span></td></tr>
+  {% else %}
+  <tr><td colspan="3" class="muted">No flags.</td></tr>
+  {% endfor %}
+</table>
+</div>
+
+<h3>Document-Vault Expiries (next 60 days)</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Employee</th><th>Category</th><th>Title</th><th>Expiry</th><th>Days Left</th></tr>
+  {% for r in doc_expiries %}
+  <tr>
+    <td>{{ r.user.name }} ({{ r.user.id }})</td><td>{{ r.doc.category }}</td>
+    <td>{{ r.doc.title }}</td><td>{{ r.doc.expiry_date }}</td>
+    <td><span class="badge {{ 'rejected' if r.days_left < 0 else 'pending' }}">{{ r.days_left }} days</span></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5" class="muted">No document expiries in the next 60 days.</td></tr>
+  {% endfor %}
+</table>
+</div>
+<form method="post" style="margin-bottom:1em">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="queue_whatsapp">
+  <button class="btn small primary" type="submit">Queue WhatsApp Reminders (expiring documents)</button>
+</form>
+
+<h3>Probation Ending (next 30 days - 6-month probation)</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Employee</th><th>Joining Date</th><th>Probation Ends</th><th>Days Left</th></tr>
+  {% for p in probation %}
+  <tr>
+    <td><a href="{{ url_for('hrms.employee_detail', uid=p.user.id) }}">{{ p.user.name }} ({{ p.user.id }})</a></td>
+    <td>{{ p.user.joining_date }}</td><td>{{ p.end }}</td>
+    <td><span class="badge {% if p.days_left <= 10 %}pending{% else %}late{% endif %}">{{ p.days_left }} days</span></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="muted">No probation periods ending in the next 30 days.</td></tr>
+  {% endfor %}
+</table>
+</div>
+
+<h3>End-of-Service Gratuity</h3>
+<div class="formcard">
+  <p>Total estimated liability across <strong>{{ liability_count }}</strong> active staff (employer-termination
+     basis, as of {{ today }}): <strong>AED {{ "%.2f"|format(liability) }}</strong></p>
+  <p><a class="btn small primary" href="{{ url_for('hrms.gratuity_calc') }}">Open Gratuity Calculator</a></p>
+</div>
+
+<h3>WPS Payroll Export</h3>
+<div class="formcard">
+  <p>Download a CSV for active employees: Employee ID, Name, IBAN, Bank, Basic, Monthly, Fixed, Variable.
+     This is the <strong>CSV working input</strong> - the formal MOHRE .sif file must be generated
+     through your bank / WPS agent; this CSV is not an official .sif file.</p>
+  <p><a class="btn small primary" href="{{ url_for('hrms.wps_export') }}">Download legacy simple WPS CSV</a> <span class="muted">(rough working file - use WPS Files for the per-company payroll files)</span></p>
+</div>
+
+<h3>UAE Leave Policy</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Leave Type</th><th>Entitlement</th><th>UAE Law Reference Note</th></tr>
+  {% for key, t in leave_types.items() %}
+  <tr><td>{{ t.label }}</td><td>{{ t.entitled }} days</td><td>{{ t.note }}</td></tr>
+  {% endfor %}
+</table>
+</div>
+
+<h3>Working Hours &amp; Overtime - Reference</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Topic</th><th>Rule</th></tr>
+  {% for topic, rule in hours_notes %}
+  <tr><td class="wrap"><strong>{{ topic }}</strong></td><td class="wrap">{{ rule }}</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

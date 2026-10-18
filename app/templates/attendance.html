@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Attendance{% endblock %}
+{% block content %}
+<h2>Attendance - {{ view_date.strftime('%B %Y') }}</h2>
+<div class="pager">
+  <a class="btn small" href="{{ url_for('views.attendance', y=prev_m.year, m=prev_m.month) }}">&larr; Prev</a>
+  <a class="btn small" href="{{ url_for('views.attendance') }}">This month</a>
+  <a class="btn small" href="{{ url_for('views.attendance', y=next_m.year, m=next_m.month) }}">Next &rarr;</a>
+</div>
+<div class="tbl-wrap"><table class="tbl cal">
+  <tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr>
+  {% for week in weeks %}
+  <tr>
+    {% for d in week %}
+    <td class="{% if d == 0 %}empty{% endif %}">
+      {% if d != 0 %}
+      {% set dt = view_date.replace(day=d) %}
+      <div class="daynum">{{ d }}</div>
+      {% set r = by_date.get(dt) %}
+      {% if r %}
+      <span class="badge {{ r.status }}">{{ r.status }}</span>
+      {% if r.check_in %}<div class="times">{{ r.check_in }} - {{ r.check_out or '' }}</div>{% endif %}
+      {% elif dt <= today %}<span class="badge na">no record</span>{% endif %}
+      {% endif %}
+    </td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table></div>
+{% endblock %}
