@@ -56,6 +56,10 @@ def create_app():
     app.register_blueprint(reports.reports_bp)
     from app import retail  # noqa: E402  (v3.1 retail-fixture registers)
     app.register_blueprint(retail.retail_bp)
+    from app import roster  # noqa: E402  (v3.2 shift roster)
+    app.register_blueprint(roster.roster_bp)
+    from app import settlement  # noqa: E402  (v3.2 full & final settlement)
+    app.register_blueprint(settlement.settlement_bp)
 
     @app.before_request
     def enforce_password_change():

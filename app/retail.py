@@ -689,7 +689,11 @@ def separations():
                      "Settlement": r.final_settlement_status,
                      "Assets Pending": (f"{pending} unreturned"
                                         if pending else ""),
-                     "delete_url": url_for("retail.separation_delete", rid=r.id)})
+                     "delete_url": url_for("retail.separation_delete", rid=r.id),
+                     # v3.2: jump to the Full & Final settlement for matched users.
+                     "settlement_url": (url_for("settlement.new",
+                                                user_id=r.employee_code)
+                                        if r.employee_code in users else None)})
     # separated users not yet in the register
     rec_codes = {r.employee_code for r in SeparationRecord.query.all()}
     user_rows = []

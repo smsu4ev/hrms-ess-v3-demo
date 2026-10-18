@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}New Final Settlement{% endblock %}
+{% block content %}
+<h2>New Final Settlement</h2>
+<p class="muted">Creates a draft settlement. The breakdown is computed when you press <strong>Calculate</strong> on the settlement page.</p>
+<div class="formcard">
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Employee *
+      <select name="user_id" required>
+        <option value="">— select employee —</option>
+        {% for u in users %}
+        <option value="{{ u.id }}" {% if uid==u.id %}selected{% endif %}>{{ u.name }} ({{ u.id }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Last Working Day *
+      <input type="date" name="last_working_day" required value="{{ lwd.isoformat() if lwd else '' }}">
+    </label>
+    <label>Separation Type *
+      <select name="separation_type">
+        {% for t in types %}<option value="{{ t }}" {% if sep_type==t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Notice Days <input type="number" min="0" name="notice_days" value="0"></label>
+    <label>Notice Direction
+      <select name="notice_direction">
+        <option value="none" selected>None</option>
+        <option value="company_pays">Company pays employee</option>
+        <option value="employee_pays">Employee owes company</option>
+      </select>
+    </label>
+    <label>Reason <input type="text" name="reason" maxlength="300" value="{{ reason or '' }}"></label>
+    <button class="btn primary" type="submit">Create Draft</button>
+    <a class="btn" href="{{ url_for('settlement.settlements') }}">Cancel</a>
+  </form>
+</div>
+{% endblock %}

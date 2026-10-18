@@ -450,3 +450,51 @@ def _seed_v31_extras():
                          notice_days=30, final_settlement_status="Pending",
                          settlement_amount=0.0, created_by="HRADMIN"),
     ])
+
+
+def _seed_v32_extras():
+    """Shift roster + final settlement demo data (v3.2).
+
+    Idempotent: seeds only when the module tables are empty, and never
+    changes the 20 demo users or their statuses. Ramadan dates are left
+    empty on purpose (never fake religious dates).
+    """
+    from app.models import (ShiftPattern, RosterSettings, RosterAssignment,
+                            FinalSettlement, User)
+    from app import db
+    if not ShiftPattern.query.first():
+        for code, name, st, et in (
+                ("GEN", "General Shift", "08:00", "18:00"),
+                ("MORN", "Morning Shift", "06:00", "14:00"),
+                ("EVE", "Evening Shift", "14:00", "22:00"),
+                ("NIGHT", "Night Shift", "22:00", "06:00")):
+            db.session.add(ShiftPattern(
+                code=code, name=name, start_time=st, end_time=et,
+                break_minutes=60, grace_minutes=10))
+        db.session.flush()
+    if db.session.get(RosterSettings, 1) is None:
+        db.session.add(RosterSettings(id=1))  # Ramadan dates left empty
+    if not RosterAssignment.query.first():
+        pats = {p.code: p for p in ShiftPattern.query.all()}
+        today = date.today()
+        monday = today - timedelta(days=today.weekday())
+        for uid, pcode in (
+                ("EMP001", "GEN"), ("EMP002", "GEN"), ("EMP003", "GEN"),
+                ("EMP004", "GEN"), ("EMP005", "GEN"), ("EMP008", "MORN"),
+                ("EMP015", "MORN"), ("EMP011", "EVE"), ("EMP007", "NIGHT"),
+                ("EMP014", "NIGHT")):
+            if db.session.get(User, uid) is None:
+                continue
+            for d in range(7):
+                db.session.add(RosterAssignment(
+                    user_id=uid, date=monday + timedelta(days=d),
+                    shift_id=pats[pcode].id, created_by="HRADMIN"))
+    if not FinalSettlement.query.first():
+        today = date.today()
+        lwd = date(today.year, today.month, 1) - timedelta(days=1)
+        db.session.add(FinalSettlement(
+            user_id="EMP013", last_working_day=lwd,
+            separation_type="Resignation", reason="Demo draft settlement",
+            status="draft", notice_days=0, notice_direction="none",
+            created_by="HRADMIN"))
+    db.session.flush()

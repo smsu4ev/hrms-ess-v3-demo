@@ -141,7 +141,8 @@ def ensure_demo_users():
                                     _seed_regularisations, _seed_candidates,
                                     _seed_onboarding, _seed_grievances,
                                     _seed_evaluations,
-                                    _seed_v3_extras, _seed_v31_extras)
+                                    _seed_v3_extras, _seed_v31_extras,
+                                    _seed_v32_extras)
     import config as app_config
 
     today = date.today()
@@ -192,6 +193,7 @@ def ensure_demo_users():
     _seed_evaluations()
     _seed_v3_extras(DEMO_USERS, _iban)
     _seed_v31_extras()
+    _seed_v32_extras()
 
     db.session.commit()
     return created

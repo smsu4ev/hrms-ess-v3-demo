@@ -45,7 +45,8 @@
     <td>{{ r["Settlement"] }}</td>
     <td>{% if r["Assets Pending"] %}<span class="warn">{{ r["Assets Pending"] }}</span>{% else %}—{% endif %}</td>
     {% if can_write %}
-    <td>
+    <td style="white-space:nowrap">
+      {% if r.settlement_url %}<a class="btn small" href="{{ r.settlement_url }}">Settlement</a>{% endif %}
       <form method="post" action="{{ r.delete_url }}" style="display:inline" onsubmit="return confirm('Delete this record?')">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn small danger" type="submit">Delete</button>

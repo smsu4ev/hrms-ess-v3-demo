@@ -644,3 +644,108 @@ class AssetCustody(db.Model):
     @property
     def is_outstanding(self):
         return self.status == "Issued" and not self.returned_date
+
+
+# ===================== HRMS+ESS V3.2 models =====================
+
+class ShiftPattern(db.Model):
+    """Shift patterns for factory/office rostering (v3.2)."""
+    __tablename__ = "shift_patterns"
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), unique=True, nullable=False)  # GEN|MORN|EVE|NIGHT
+    name = db.Column(db.String(80), nullable=False)
+    start_time = db.Column(db.String(5), nullable=False)  # "HH:MM"
+    end_time = db.Column(db.String(5), nullable=False)    # "HH:MM"
+    break_minutes = db.Column(db.Integer, default=60, nullable=False)
+    grace_minutes = db.Column(db.Integer, default=10, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    @property
+    def crosses_midnight(self):
+        # "HH:MM" zero-padded strings compare lexicographically.
+        return (self.end_time or "") <= (self.start_time or "")
+
+
+class RosterAssignment(db.Model):
+    """One employee's shift for one date (v3.2)."""
+    __tablename__ = "roster_assignments"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"), nullable=False, index=True)
+    date = db.Column(db.Date, nullable=False, index=True)
+    shift_id = db.Column(db.Integer, db.ForeignKey("shift_patterns.id"), nullable=False)
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    shift = db.relationship("ShiftPattern")
+    __table_args__ = (db.UniqueConstraint("user_id", "date"),)
+
+
+class RosterSettings(db.Model):
+    """Singleton row (id=1): Ramadan + summer midday-break configuration (v3.2)."""
+    __tablename__ = "roster_settings"
+    id = db.Column(db.Integer, primary_key=True)
+    ramadan_start = db.Column(db.Date, nullable=True)
+    ramadan_end = db.Column(db.Date, nullable=True)
+    ramadan_daily_hours = db.Column(db.Float, default=6.0, nullable=False)
+    standard_daily_hours = db.Column(db.Float, default=8.0, nullable=False)
+    midday_break_start = db.Column(db.String(5), default="12:30", nullable=False)
+    midday_break_end = db.Column(db.String(5), default="15:00", nullable=False)
+    midday_season_start_md = db.Column(db.String(5), default="06-15", nullable=False)
+    midday_season_end_md = db.Column(db.String(5), default="09-15", nullable=False)
+
+
+class FinalSettlement(db.Model):
+    """Full & Final settlement for a separating employee (v3.2).
+
+    Status flow: draft -> calculated -> approved -> paid.
+    Calculate freezes computed + manual lines into lines_json.
+    Approve enforces creator != approver (SoD, same rule as payroll runs).
+    """
+    __tablename__ = "final_settlements"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"), nullable=False, index=True)
+    separation_record_id = db.Column(db.Integer, db.ForeignKey("separation_records.id"),
+                                     nullable=True)
+    last_working_day = db.Column(db.Date, nullable=False)
+    separation_type = db.Column(db.String(30), default="Resignation", nullable=False)
+    reason = db.Column(db.Text)
+    status = db.Column(db.String(20), default="draft", nullable=False)
+    # draft | calculated | approved | paid
+    notice_days = db.Column(db.Integer, default=0, nullable=False)
+    notice_direction = db.Column(db.String(20), default="none", nullable=False)
+    # company_pays | employee_pays | none
+    lines_json = db.Column(db.Text, default="[]", nullable=False)
+    total_payable = db.Column(db.Float, default=0.0, nullable=False)
+    total_recoverable = db.Column(db.Float, default=0.0, nullable=False)
+    net = db.Column(db.Float, default=0.0, nullable=False)
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    approved_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    approved_at = db.Column(db.DateTime)
+    paid_at = db.Column(db.DateTime)
+    paid_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+
+    user = db.relationship("User", foreign_keys="FinalSettlement.user_id")
+
+    @property
+    def lines(self):
+        import json
+        try:
+            return json.loads(self.lines_json or "[]")
+        except Exception:
+            return []
+
+
+class SettlementLine(db.Model):
+    """Manual adjustment lines entered while a settlement is a draft (v3.2)."""
+    __tablename__ = "settlement_lines"
+    id = db.Column(db.Integer, primary_key=True)
+    settlement_id = db.Column(db.Integer, db.ForeignKey("final_settlements.id"),
+                              nullable=False, index=True)
+    label = db.Column(db.String(160), nullable=False)
+    kind = db.Column(db.String(20), default="payable", nullable=False)  # payable|recoverable
+    amount = db.Column(db.Float, default=0.0, nullable=False)
+    is_manual = db.Column(db.Boolean, default=True, nullable=False)
+    note = db.Column(db.String(300))
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

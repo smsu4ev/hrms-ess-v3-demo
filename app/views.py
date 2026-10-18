@@ -545,3 +545,19 @@ def regularisation_approvals():
     users = {u.id: u for u in User.query.filter(
         User.id.in_([r.user_id for r in items])).all()} if items else {}
     return render_template("regularisation_approvals.html", items=items, users=users)
+
+
+# ---------------- My Roster (employee, v3.2) ----------------
+@views_bp.route("/my-roster")
+@login_required
+def my_roster():
+    """Employee's own shift assignments for the next 14 days."""
+    from app.models import RosterAssignment
+    today = date.today()
+    rows = []
+    for i in range(14):
+        d = today + timedelta(days=i)
+        a = RosterAssignment.query.filter_by(user_id=current_user.id,
+                                             date=d).first()
+        rows.append({"date": d, "assignment": a, "today": d == today})
+    return render_template("my_roster.html", rows=rows)
