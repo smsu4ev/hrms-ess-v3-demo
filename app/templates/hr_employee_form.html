@@ -48,6 +48,18 @@
     </select>
   </label>
   <label>Exit Date (if left) <input type="date" name="exit_date" value="{{ user.exit_date if user and user.exit_date }}"></label>
+  {% if user and user.employment_status in ('resigned', 'terminated', 'retired') %}
+  <label>Separation Date <input type="date" name="separation_date" value="{{ user.separation_date if user.separation_date }}"></label>
+  <label>Separation Type
+    <select name="separation_type">
+      <option value="">- none -</option>
+      {% for t in ['Resignation', 'Termination', 'Contract End', 'Retirement', 'Absconding', 'Other'] %}
+      <option value="{{ t }}" {% if user.separation_type == t %}selected{% endif %}>{{ t }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <p class="muted">When a separation date is set, the employee also appears in the Separation and Turnover reports.</p>
+  {% endif %}
   {% if current_user.is_admin %}
   <label>Basic Salary <input type="number" step="0.01" name="basic_salary" value="{{ user.basic_salary if user else 0 }}"></label>
   <label>Monthly Salary <input type="number" step="0.01" name="monthly_salary" value="{{ user.monthly_salary if user else 0 }}"></label>

@@ -306,3 +306,147 @@ def _seed_v3_extras(demo_users, iban_fn):
                 verified_by="HRADMIN" if status == "verified" else None)
             db.session.add(doc)
         db.session.flush()
+
+
+# ---------------- v3.1: retail registers + separation records ----------------
+def _seed_v31_extras():
+    """Sample data for the v3.1 retail-fixture registers and separations.
+
+    Idempotent: seeds only when the module tables are empty, and never
+    changes the 20 demo users or their statuses.
+    """
+    from app.models import (Certification, Project, Deployment,
+                            FacilityAssignment, PPEIssue, HSEIncident,
+                            ContractorWorker, SeparationRecord, AssetCustody)
+    from app import db
+    if Certification.query.first():
+        return
+    today = date.today()
+
+    certs = [
+        # one certification expiring within 60 days (Forklift, +30 days)
+        dict(user_id="EMP001", name="Welding Trade", issuer="Demo Technical Institute",
+             issue_date=today - timedelta(days=400), expiry_date=today + timedelta(days=400)),
+        dict(user_id="EMP004", name="Forklift Operation", issuer="Demo Safety Academy",
+             issue_date=today - timedelta(days=700), expiry_date=today + timedelta(days=30)),
+        dict(user_id="EMP007", name="Heavy Vehicle Driving Licence",
+             issuer="RTA Dubai", issue_date=today - timedelta(days=500),
+             expiry_date=today + timedelta(days=500)),
+        dict(user_id="EMP008", name="Fire Safety", issuer="Demo Safety Academy",
+             issue_date=today - timedelta(days=800), expiry_date=today + timedelta(days=100)),
+    ]
+    for c in certs:
+        db.session.add(Certification(created_by="HRADMIN", **c))
+
+    p1 = Project(name="Store Fit-Out — Dubai Mall Client", client="Demo Retail LLC",
+                 location="Dubai Mall, Dubai", status="active", created_by="HRADMIN")
+    p2 = Project(name="Warehouse Racking — UAQ", client="Demo Logistics Co",
+                 location="Umm Al Quwain", status="active", created_by="HRADMIN")
+    db.session.add_all([p1, p2])
+    db.session.flush()
+    db.session.add_all([
+        Deployment(user_id="EMP001", project_id=p1.id,
+                   from_date=today - timedelta(days=60), to_date=None,
+                   site_allowance=300.0, created_by="HRADMIN"),
+        Deployment(user_id="EMP004", project_id=p1.id,
+                   from_date=today - timedelta(days=60), to_date=None,
+                   site_allowance=300.0, created_by="HRADMIN"),
+        Deployment(user_id="EMP015", project_id=p2.id,
+                   from_date=today - timedelta(days=30), to_date=None,
+                   site_allowance=200.0, created_by="HRADMIN"),
+    ])
+
+    db.session.add_all([
+        FacilityAssignment(user_id="EMP001", kind="accommodation",
+                           location_or_route="Labour Camp A — Room 12",
+                           monthly_cost=250.0,
+                           from_date=today - timedelta(days=300), to_date=None,
+                           created_by="HRADMIN"),
+        FacilityAssignment(user_id="EMP004", kind="transport",
+                           location_or_route="Bus Route 3 — Sharjah to UAQ",
+                           monthly_cost=150.0,
+                           from_date=today - timedelta(days=300), to_date=None,
+                           created_by="HRADMIN"),
+        FacilityAssignment(user_id="EMP007", kind="accommodation",
+                           location_or_route="Labour Camp B — Room 04",
+                           monthly_cost=250.0,
+                           from_date=today - timedelta(days=200), to_date=None,
+                           created_by="HRADMIN"),
+    ])
+
+    db.session.add_all([
+        PPEIssue(user_id="EMP001", item="Safety Helmet", size="M", qty=1,
+                 issued_date=today - timedelta(days=90), created_by="HRADMIN"),
+        PPEIssue(user_id="EMP001", item="Safety Shoes", size="42", qty=1,
+                 issued_date=today - timedelta(days=90), created_by="HRADMIN"),
+        PPEIssue(user_id="EMP004", item="Welding Gloves", size="L", qty=2,
+                 issued_date=today - timedelta(days=60), created_by="HRADMIN"),
+        PPEIssue(user_id="EMP015", item="Hi-Vis Vest", size="XL", qty=1,
+                 issued_date=today - timedelta(days=45), created_by="HRADMIN"),
+    ])
+
+    db.session.add_all([
+        AssetCustody(user_id="EMP003", item_name="DeWalt Cordless Drill",
+                     category="Tool", serial_no="DCD-2201", replacement_value=850.0,
+                     issued_date=today - timedelta(days=120), status="Issued",
+                     created_by="HRADMIN"),
+        AssetCustody(user_id="EMP008", item_name="Laptop — Lenovo ThinkPad",
+                     category="IT Asset", serial_no="LT-5540",
+                     replacement_value=3200.0,
+                     issued_date=today - timedelta(days=300),
+                     returned_date=today - timedelta(days=10), status="Returned",
+                     created_by="HRADMIN"),
+        AssetCustody(user_id="EMP004", item_name="Welding Machine Inverter",
+                     category="Tool", serial_no="WM-8871", replacement_value=2400.0,
+                     issued_date=today - timedelta(days=200), status="Issued",
+                     created_by="HRADMIN"),
+    ])
+
+    db.session.add(HSEIncident(
+        date=today - timedelta(days=20), location="Factory Floor — Welding Bay",
+        employee_id=None, type="Near Miss", severity="Low",
+        description="Welding spark landed near gas cylinder storage area.",
+        action_taken="Toolbox talk conducted; cylinders relocated to the "
+                     "designated cage.",
+        status="Closed", created_by="HRADMIN"))
+
+    db.session.add_all([
+        ContractorWorker(name="Suresh Menon", company="Demo Manpower Supply",
+                         trade="Welder", site="UAQ Factory",
+                         start_date=today - timedelta(days=60), end_date=None,
+                         monthly_rate=1800.0, status="active",
+                         created_by="HRADMIN"),
+        ContractorWorker(name="Anil Das", company="Demo Manpower Supply",
+                         trade="Grinder", site="UAQ Factory",
+                         start_date=today - timedelta(days=30), end_date=None,
+                         monthly_rate=1500.0, status="active",
+                         created_by="HRADMIN"),
+    ])
+
+    year = today.year
+    db.session.add_all([
+        SeparationRecord(employee_code="AA901", employee_name="Ravi Shankar",
+                         department="Production", designation="Welder",
+                         joining_date=date(year - 5, 3, 1),
+                         separation_date=date(year, 2, 15),
+                         separation_type="Resignation",
+                         reason="Better opportunity",
+                         notice_days=30, final_settlement_status="Settled",
+                         settlement_amount=8500.0, created_by="HRADMIN"),
+        SeparationRecord(employee_code="AA902", employee_name="Joseph DSouza",
+                         department="Sales", designation="Sales Executive",
+                         joining_date=date(year - 4, 6, 10),
+                         separation_date=date(year, 5, 20),
+                         separation_type="Termination",
+                         reason="Performance",
+                         notice_days=30, final_settlement_status="In Process",
+                         settlement_amount=0.0, created_by="HRADMIN"),
+        SeparationRecord(employee_code="AA903", employee_name="Lakshmi Nair",
+                         department="Admin", designation="Receptionist",
+                         joining_date=date(year - 3, 1, 15),
+                         separation_date=date(year, 8, 1),
+                         separation_type="Resignation",
+                         reason="Relocation",
+                         notice_days=30, final_settlement_status="Pending",
+                         settlement_amount=0.0, created_by="HRADMIN"),
+    ])

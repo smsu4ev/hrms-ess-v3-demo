@@ -1,3 +1,4 @@
+{% from "_icons.html" import icon %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,8 +9,9 @@
 </head>
 <body>
 {% if current_user.is_authenticated %}
+<div id="pjax-progress" aria-hidden="true"></div>
 <header class="topbar">
-  <button class="hamburger" id="navToggle" aria-label="Open navigation menu" aria-expanded="false">&#9776;</button>
+  <button class="hamburger" id="navToggle" aria-label="Open navigation menu" aria-expanded="false"><span class="h-ico">{{ icon('menu') }}</span></button>
   <div class="brand"><span class="logo-dot"></span><span class="brand-name">{{ company_name }}</span> <span class="trade">{{ trade_name }}</span></div>
   <div class="userbox">
     <span class="uname">{{ current_user.name }} <span class="uid">({{ current_user.id }})</span></span>
@@ -23,49 +25,62 @@
 <div class="navscrim" id="navScrim" aria-hidden="true"></div>
 <div class="layout">
   <nav class="sidebar" id="sidebar" aria-label="Main navigation">
-    <a href="{{ url_for('views.dashboard') }}"><span class="nav-ico">&#8962;</span><span class="nav-txt">Dashboard</span></a>
-    <a href="{{ url_for('views.leave') }}"><span class="nav-ico">&#128197;</span><span class="nav-txt">Leave</span></a>
-    <a href="{{ url_for('views.attendance') }}"><span class="nav-ico">&#128336;</span><span class="nav-txt">Attendance</span></a>
-    <a href="{{ url_for('views.regularisation') }}"><span class="nav-ico">&#9998;</span><span class="nav-txt">Regularisation</span></a>
-    <a href="{{ url_for('views.payslips') }}"><span class="nav-ico">&#128179;</span><span class="nav-txt">Payslips</span></a>
-    <a href="{{ url_for('views.grievances') }}"><span class="nav-ico">&#128172;</span><span class="nav-txt">Grievances</span></a>
-    <a href="{{ url_for('views.evaluations') }}"><span class="nav-ico">&#9733;</span><span class="nav-txt">My Evaluations</span></a>
-    <a href="{{ url_for('views.profile') }}"><span class="nav-ico">&#128100;</span><span class="nav-txt">My Profile</span></a>
-    <a href="{{ url_for('docs.my_documents') }}"><span class="nav-ico">&#128196;</span><span class="nav-txt">My Documents</span></a>
-    <a href="{{ url_for('views.my_gratuity') }}"><span class="nav-ico">&#128178;</span><span class="nav-txt">EOS Gratuity</span></a>
+    <a href="{{ url_for('views.dashboard') }}"><span class="nav-ico">{{ icon('home') }}</span><span class="nav-txt">Dashboard</span></a>
+    <a href="{{ url_for('views.leave') }}"><span class="nav-ico">{{ icon('calendar') }}</span><span class="nav-txt">Leave</span></a>
+    <a href="{{ url_for('views.attendance') }}"><span class="nav-ico">{{ icon('clock') }}</span><span class="nav-txt">Attendance</span></a>
+    <a href="{{ url_for('views.regularisation') }}"><span class="nav-ico">{{ icon('pencil') }}</span><span class="nav-txt">Regularisation</span></a>
+    <a href="{{ url_for('views.payslips') }}"><span class="nav-ico">{{ icon('card') }}</span><span class="nav-txt">Payslips</span></a>
+    <a href="{{ url_for('views.grievances') }}"><span class="nav-ico">{{ icon('chat') }}</span><span class="nav-txt">Grievances</span></a>
+    <a href="{{ url_for('views.evaluations') }}"><span class="nav-ico">{{ icon('star') }}</span><span class="nav-txt">My Evaluations</span></a>
+    <a href="{{ url_for('views.profile') }}"><span class="nav-ico">{{ icon('user') }}</span><span class="nav-txt">My Profile</span></a>
+    <a href="{{ url_for('docs.my_documents') }}"><span class="nav-ico">{{ icon('file') }}</span><span class="nav-txt">My Documents</span></a>
+    <a href="{{ url_for('views.my_gratuity') }}"><span class="nav-ico">{{ icon('money') }}</span><span class="nav-txt">EOS Gratuity</span></a>
     {% if current_user.is_manager %}
     <div class="navhead">Manager</div>
-    <a href="{{ url_for('views.approvals') }}"><span class="nav-ico">&#9989;</span><span class="nav-txt">Leave Approvals</span></a>
-    <a href="{{ url_for('views.regularisation_approvals') }}"><span class="nav-ico">&#9998;</span><span class="nav-txt">Regularisation Approvals</span></a>
-    <a href="{{ url_for('views.evaluations_manage') }}"><span class="nav-ico">&#9733;</span><span class="nav-txt">Evaluations</span></a>
-    <a href="{{ url_for('views.grievance_inbox') }}"><span class="nav-ico">&#128172;</span><span class="nav-txt">Grievance Inbox</span></a>
+    <a href="{{ url_for('views.approvals') }}"><span class="nav-ico">{{ icon('check') }}</span><span class="nav-txt">Leave Approvals</span></a>
+    <a href="{{ url_for('views.regularisation_approvals') }}"><span class="nav-ico">{{ icon('pencil') }}</span><span class="nav-txt">Regularisation Approvals</span></a>
+    <a href="{{ url_for('views.evaluations_manage') }}"><span class="nav-ico">{{ icon('star') }}</span><span class="nav-txt">Evaluations</span></a>
+    <a href="{{ url_for('views.grievance_inbox') }}"><span class="nav-ico">{{ icon('chat') }}</span><span class="nav-txt">Grievance Inbox</span></a>
     {% endif %}
     {% if current_user.is_admin or can_view_salary %}
     <div class="navhead">Payroll</div>
-    <a href="{{ url_for('payroll.runs') }}"><span class="nav-ico">&#128176;</span><span class="nav-txt">Payroll Runs</span></a>
-    <a href="{{ url_for('payroll.loans') }}"><span class="nav-ico">&#128179;</span><span class="nav-txt">Loans & Advances</span></a>
-    <a href="{{ url_for('payroll.components') }}"><span class="nav-ico">&#128202;</span><span class="nav-txt">Salary Components</span></a>
-    <a href="{{ url_for('payroll.ot_rules') }}"><span class="nav-ico">&#9200;</span><span class="nav-txt">OT Rate Rules</span></a>
-    <a href="{{ url_for('payroll.companies') }}"><span class="nav-ico">&#127970;</span><span class="nav-txt">Visa Companies</span></a>
-    <a href="{{ url_for('payroll.wps') }}"><span class="nav-ico">&#8681;</span><span class="nav-txt">WPS Files</span></a>
-    <a href="{{ url_for('payroll.letters') }}"><span class="nav-ico">&#9993;</span><span class="nav-txt">Letters</span></a>
-    <a href="{{ url_for('docs.hr_documents') }}"><span class="nav-ico">&#128451;</span><span class="nav-txt">Document Vault</span></a>
+    <a href="{{ url_for('payroll.runs') }}"><span class="nav-ico">{{ icon('money') }}</span><span class="nav-txt">Payroll Runs</span></a>
+    <a href="{{ url_for('payroll.loans') }}"><span class="nav-ico">{{ icon('card') }}</span><span class="nav-txt">Loans &amp; Advances</span></a>
+    <a href="{{ url_for('payroll.components') }}"><span class="nav-ico">{{ icon('chart') }}</span><span class="nav-txt">Salary Components</span></a>
+    <a href="{{ url_for('payroll.ot_rules') }}"><span class="nav-ico">{{ icon('stopwatch') }}</span><span class="nav-txt">OT Rate Rules</span></a>
+    <a href="{{ url_for('payroll.companies') }}"><span class="nav-ico">{{ icon('building') }}</span><span class="nav-txt">Visa Companies</span></a>
+    <a href="{{ url_for('payroll.wps') }}"><span class="nav-ico">{{ icon('download') }}</span><span class="nav-txt">WPS Files</span></a>
+    <a href="{{ url_for('payroll.letters') }}"><span class="nav-ico">{{ icon('mail') }}</span><span class="nav-txt">Letters</span></a>
+    <a href="{{ url_for('docs.hr_documents') }}"><span class="nav-ico">{{ icon('file') }}</span><span class="nav-txt">Document Vault</span></a>
+    {% endif %}
+    {% if current_user.is_manager %}
+    <div class="navhead">Retail Operations</div>
+    <a href="{{ url_for('retail.certifications') }}"><span class="nav-ico">{{ icon('medal') }}</span><span class="nav-txt">Certifications</span></a>
+    <a href="{{ url_for('retail.training_matrix') }}"><span class="nav-ico">{{ icon('graduation') }}</span><span class="nav-txt">Training Matrix</span></a>
+    <a href="{{ url_for('retail.projects') }}"><span class="nav-ico">{{ icon('briefcase') }}</span><span class="nav-txt">Projects &amp; Deployment</span></a>
+    <a href="{{ url_for('retail.facilities') }}"><span class="nav-ico">{{ icon('truck') }}</span><span class="nav-txt">Accommodation &amp; Transport</span></a>
+    <a href="{{ url_for('retail.ppe') }}"><span class="nav-ico">{{ icon('shirt') }}</span><span class="nav-txt">PPE &amp; Uniform</span></a>
+    <a href="{{ url_for('retail.assets') }}"><span class="nav-ico">{{ icon('briefcase') }}</span><span class="nav-txt">Asset &amp; Tool Custody</span></a>
+    <a href="{{ url_for('retail.hse') }}"><span class="nav-ico">{{ icon('alert') }}</span><span class="nav-txt">HSE Incidents</span></a>
+    <a href="{{ url_for('retail.contractors') }}"><span class="nav-ico">{{ icon('usercheck') }}</span><span class="nav-txt">Contractors</span></a>
+    <a href="{{ url_for('retail.separations') }}"><span class="nav-ico">{{ icon('idcard') }}</span><span class="nav-txt">Separations</span></a>
     {% endif %}
     {% if current_user.is_admin %}
     <div class="navhead">HRMS Admin</div>
-    <a href="{{ url_for('hrms.employees') }}"><span class="nav-ico">&#128101;</span><span class="nav-txt">Employee Central</span></a>
-    <a href="{{ url_for('hrms.compliance') }}"><span class="nav-ico">&#9878;</span><span class="nav-txt">Compliance</span></a>
-    <a href="{{ url_for('hrms.gratuity_calc') }}"><span class="nav-ico">&#128178;</span><span class="nav-txt">Gratuity Calculator</span></a>
-    <a href="{{ url_for('hrms.wps_export') }}"><span class="nav-ico">&#8681;</span><span class="nav-txt">WPS Export (Legacy simple)</span></a>
-    <a href="{{ url_for('hrms.recruitment') }}"><span class="nav-ico">&#128203;</span><span class="nav-txt">Recruitment</span></a>
-    <a href="{{ url_for('hrms.onboarding') }}"><span class="nav-ico">&#127891;</span><span class="nav-txt">Onboarding</span></a>
-    <a href="{{ url_for('admin.users') }}"><span class="nav-ico">&#128100;</span><span class="nav-txt">Manage Users</span></a>
-    <a href="{{ url_for('admin.audit') }}"><span class="nav-ico">&#128221;</span><span class="nav-txt">Audit Log</span></a>
-    <a href="{{ url_for('admin.attendance_import') }}"><span class="nav-ico">&#8681;</span><span class="nav-txt">Import Attendance</span></a>
-    <a href="{{ url_for('admin.outbox') }}"><span class="nav-ico">&#128241;</span><span class="nav-txt">WhatsApp Outbox</span></a>
+    <a href="{{ url_for('hrms.employees') }}"><span class="nav-ico">{{ icon('users') }}</span><span class="nav-txt">Employee Central</span></a>
+    <a href="{{ url_for('hrms.compliance') }}"><span class="nav-ico">{{ icon('scales') }}</span><span class="nav-txt">Compliance</span></a>
+    <a href="{{ url_for('hrms.gratuity_calc') }}"><span class="nav-ico">{{ icon('money') }}</span><span class="nav-txt">Gratuity Calculator</span></a>
+    <a href="{{ url_for('hrms.wps_export') }}"><span class="nav-ico">{{ icon('download') }}</span><span class="nav-txt">WPS Export (Legacy simple)</span></a>
+    <a href="{{ url_for('hrms.recruitment') }}"><span class="nav-ico">{{ icon('clipboard') }}</span><span class="nav-txt">Recruitment</span></a>
+    <a href="{{ url_for('hrms.onboarding') }}"><span class="nav-ico">{{ icon('graduation') }}</span><span class="nav-txt">Onboarding</span></a>
+    <a href="{{ url_for('reports.hub') }}"><span class="nav-ico">{{ icon('report') }}</span><span class="nav-txt">Reports &amp; Exports</span></a>
+    <a href="{{ url_for('admin.users') }}"><span class="nav-ico">{{ icon('user') }}</span><span class="nav-txt">Manage Users</span></a>
+    <a href="{{ url_for('admin.audit') }}"><span class="nav-ico">{{ icon('report') }}</span><span class="nav-txt">Audit Log</span></a>
+    <a href="{{ url_for('admin.attendance_import') }}"><span class="nav-ico">{{ icon('download') }}</span><span class="nav-txt">Import Attendance</span></a>
+    <a href="{{ url_for('admin.outbox') }}"><span class="nav-ico">{{ icon('phone') }}</span><span class="nav-txt">WhatsApp Outbox</span></a>
     {% endif %}
   </nav>
-  <main class="content">
+  <main class="content" id="pjax-main" data-pjax>
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for cat, msg in messages %}
@@ -77,15 +92,15 @@
   </main>
 </div>
 <nav class="bottomnav" id="bottomnav" aria-label="Quick navigation">
-  <a href="{{ url_for('views.dashboard') }}"><span class="bnav-ico">&#8962;</span><span class="bnav-txt">Home</span></a>
-  <a href="{{ url_for('views.leave') }}"><span class="bnav-ico">&#128197;</span><span class="bnav-txt">Leave</span></a>
-  <a href="{{ url_for('views.attendance') }}"><span class="bnav-ico">&#128336;</span><span class="bnav-txt">Attend.</span></a>
+  <a href="{{ url_for('views.dashboard') }}"><span class="bnav-ico">{{ icon('home') }}</span><span class="bnav-txt">Home</span></a>
+  <a href="{{ url_for('views.leave') }}"><span class="bnav-ico">{{ icon('calendar') }}</span><span class="bnav-txt">Leave</span></a>
+  <a href="{{ url_for('views.attendance') }}"><span class="bnav-ico">{{ icon('clock') }}</span><span class="bnav-txt">Attend.</span></a>
   {% if current_user.is_manager %}
-  <a href="{{ url_for('views.approvals') }}"><span class="bnav-ico">&#9989;</span><span class="bnav-txt">Approvals</span></a>
+  <a href="{{ url_for('views.approvals') }}"><span class="bnav-ico">{{ icon('check') }}</span><span class="bnav-txt">Approvals</span></a>
   {% else %}
-  <a href="{{ url_for('views.payslips') }}"><span class="bnav-ico">&#128179;</span><span class="bnav-txt">Payslips</span></a>
+  <a href="{{ url_for('views.payslips') }}"><span class="bnav-ico">{{ icon('card') }}</span><span class="bnav-txt">Payslips</span></a>
   {% endif %}
-  <a href="{{ url_for('views.profile') }}"><span class="bnav-ico">&#128100;</span><span class="bnav-txt">Profile</span></a>
+  <a href="{{ url_for('views.profile') }}"><span class="bnav-ico">{{ icon('user') }}</span><span class="bnav-txt">Profile</span></a>
 </nav>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 {% else %}

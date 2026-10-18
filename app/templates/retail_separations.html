@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Separation Register{% endblock %}
+{% block content %}
+<h2>Separation Register</h2>
+<p class="muted">Ex-employees: resignations, terminations, contract ends, retirements, absconding.
+   Used by the Separation and Turnover reports.</p>
+
+{% if can_write %}
+<div class="formcard">
+  <h3>Record a separation</h3>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Employee ID * <input type="text" name="employee_code" required maxlength="20" placeholder="e.g. AA901"></label>
+    <label>Employee Name * <input type="text" name="employee_name" required maxlength="120"></label>
+    <label>Department <input type="text" name="department" maxlength="80"></label>
+    <label>Designation <input type="text" name="designation" maxlength="80"></label>
+    <label>Joining Date <input type="date" name="joining_date"></label>
+    <label>Separation Date * <input type="date" name="separation_date" required></label>
+    <label>Separation Type *
+      <select name="separation_type">
+        {% for t in types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Reason <input type="text" name="reason" maxlength="300"></label>
+    <label>Notice Days <input type="number" min="0" name="notice_days"></label>
+    <label>Final Settlement Status
+      <select name="final_settlement_status">
+        {% for s in statuses %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Settlement Amount (AED) <input type="number" step="0.01" min="0" name="settlement_amount" value="0"></label>
+    <button class="btn primary" type="submit">Save Record</button>
+  </form>
+</div>
+{% endif %}
+
+<p class="muted">{{ rows|length }} record(s) in the register.</p>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Employee ID</th><th>Name</th><th>Department</th><th>Separation Date</th><th>Type</th><th>Tenure (yrs)</th><th>Settlement</th><th>Assets Pending</th>{% if can_write %}<th>Actions</th>{% endif %}</tr>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r["Employee ID"] }}</td><td>{{ r["Name"] }}</td><td>{{ r["Department"] }}</td>
+    <td>{{ r["Separation Date"] }}</td><td>{{ r["Type"] }}</td><td>{{ r["Tenure (yrs)"] }}</td>
+    <td>{{ r["Settlement"] }}</td>
+    <td>{% if r["Assets Pending"] %}<span class="warn">{{ r["Assets Pending"] }}</span>{% else %}—{% endif %}</td>
+    {% if can_write %}
+    <td>
+      <form method="post" action="{{ r.delete_url }}" style="display:inline" onsubmit="return confirm('Delete this record?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn small danger" type="submit">Delete</button>
+      </form>
+    </td>
+    {% endif %}
+  </tr>
+  {% else %}
+  <tr><td colspan="8" class="muted">No separation records yet.</td></tr>
+  {% endfor %}
+</table>
+</div>
+
+{% if user_rows %}
+<h3>Separated users not yet in the register</h3>
+<p class="muted">Employees whose record carries a separation date but who have no register entry.</p>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Employee ID</th><th>Name</th><th>Department</th><th>Separation Date</th><th>Type</th><th>Assets Pending</th></tr>
+  {% for r in user_rows %}
+  <tr><td>{{ r["Employee ID"] }}</td><td>{{ r["Name"] }}</td><td>{{ r["Department"] }}</td><td>{{ r["Separation Date"] }}</td><td>{{ r["Type"] }}</td><td>{% if r["Assets Pending"] %}<span class="warn">{{ r["Assets Pending"] }}</span>{% else %}—{% endif %}</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+{% endblock %}

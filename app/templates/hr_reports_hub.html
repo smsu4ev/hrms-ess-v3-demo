@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Reports & Exports{% endblock %}
+{% block content %}
+<h2>Reports &amp; Exports</h2>
+<p class="muted">On-screen views plus Excel downloads. Every export is written to the audit trail
+   with the exporting user, the report name and the filters used.</p>
+<div class="tiles">
+  <a class="tile" href="{{ url_for('reports.master') }}"><span class="t-lbl">Master Data Export</span><div class="t-sub">Employee master list with filters; salary/bank columns only for viewers with salary permission.</div></a>
+  <a class="tile" href="{{ url_for('reports.addded') }}"><span class="t-lbl">Additions &amp; Deductions</span><div class="t-sub">Payroll register per period: components, additions, arrears, OT, gross, deductions, net.</div></a>
+  <a class="tile" href="{{ url_for('reports.absence') }}"><span class="t-lbl">Absence Report</span><div class="t-sub">Working days, present, absent, late, absence rate %, optional Bradford factor.</div></a>
+  <a class="tile" href="{{ url_for('reports.leave') }}"><span class="t-lbl">Leave Report</span><div class="t-sub">Leave ledger and leave-request transactions.</div></a>
+  <a class="tile" href="{{ url_for('reports.sep_report') }}"><span class="t-lbl">Separation Report</span><div class="t-sub">Ex-employee register with tenure, type, reason, settlement status.</div></a>
+  <a class="tile" href="{{ url_for('reports.turnover') }}"><span class="t-lbl">Turnover Report</span><div class="t-sub">Separations vs headcount; voluntary/involuntary split; per-department.</div></a>
+  <a class="tile" href="{{ url_for('reports.ot_summary') }}"><span class="t-lbl">OT Summary</span><div class="t-sub">Overtime hours and amounts by tier per payroll period.</div></a>
+  <a class="tile" href="{{ url_for('reports.variance') }}"><span class="t-lbl">Payroll Variance</span><div class="t-sub">Current vs previous period: change, joiner/leaver buckets, 10% exceptions.</div></a>
+  <a class="tile" href="{{ url_for('reports.liability') }}"><span class="t-lbl">Leave &amp; EOSB Liability</span><div class="t-sub">Accrued gratuity and annual-leave value per employee.</div></a>
+  <a class="tile" href="{{ url_for('reports.wps_preflight') }}"><span class="t-lbl">WPS Pre-Flight Check</span><div class="t-sub">Data-quality flags before bank transfer: IDs, IBAN, bank, pay limits.</div></a>
+  <a class="tile" href="{{ url_for('reports.loans') }}"><span class="t-lbl">Loan Balances</span><div class="t-sub">Loans and advances: principal, recovered, balance, installment, status.</div></a>
+</div>
+<p class="muted">Scheduled (automatic) report delivery is not included - see README-V3.1 for the roadmap.</p>
+{% endblock %}

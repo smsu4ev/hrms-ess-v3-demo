@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }}{% endblock %}
+{% block content %}
+<h2>{{ project.name }}</h2>
+<p class="muted">Client: {{ project.client or '-' }} | Location: {{ project.location or '-' }} |
+   Status: {{ project.status|title }}</p>
+<p><a class="btn small" href="{{ url_for('retail.projects') }}">&laquo; All projects</a></p>
+
+{% if can_write %}
+<div class="formcard">
+  <h3>Deploy staff to this project</h3>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Employee *
+      <select name="user_id" required>
+        {% for val, lbl in user_options %}<option value="{{ val }}">{{ lbl }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>From <input type="date" name="from_date"></label>
+    <label>To <input type="date" name="to_date"></label>
+    <label>Site allowance (AED / month) <input type="number" step="0.01" min="0" name="site_allowance" value="0"></label>
+    <button class="btn primary" type="submit">Deploy</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="cards">
+  <div class="card"><div class="num">{{ rows|length }}</div><div class="lbl">Deployed staff</div></div>
+  <div class="card"><div class="num">AED {{ "%.2f"|format(total) }}</div><div class="lbl">Total site allowance / month</div></div>
+</div>
+
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Employee</th><th>From</th><th>To</th><th>Site Allowance (AED)</th>{% if can_write %}<th>Actions</th>{% endif %}</tr>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r["Employee"] }}</td><td>{{ r["From"] }}</td><td>{{ r["To"] }}</td><td>{{ r["Site Allowance (AED)"] }}</td>
+    {% if can_write %}
+    <td>
+      <form method="post" action="{{ r.delete_url }}" style="display:inline" onsubmit="return confirm('Remove this deployment?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn small danger" type="submit">Remove</button>
+      </form>
+    </td>
+    {% endif %}
+  </tr>
+  {% else %}
+  <tr><td colspan="5" class="muted">No staff deployed to this project yet.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

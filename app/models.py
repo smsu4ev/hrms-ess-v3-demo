@@ -33,6 +33,8 @@ class User(UserMixin, db.Model):
     phone = db.Column(db.String(30))
     passport_no = db.Column(db.String(40))
     exit_date = db.Column(db.Date)
+    separation_date = db.Column(db.Date)      # v3.1: separation register
+    separation_type = db.Column(db.String(30))
     basic_salary = db.Column(db.Float, default=0.0)
     monthly_salary = db.Column(db.Float, default=0.0)
     password_hash = db.Column(db.String(255), nullable=False)
@@ -462,3 +464,183 @@ class NotificationOutbox(db.Model):
     message = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(20), default="queued", nullable=False)  # queued|sent|failed
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ===================== HRMS+ESS V3.1 models =====================
+
+class SeparationRecord(db.Model):
+    """Separation register (ex-employees): resignation, termination, etc."""
+    __tablename__ = "separation_records"
+    id = db.Column(db.Integer, primary_key=True)
+    employee_code = db.Column(db.String(20), nullable=False, index=True)
+    employee_name = db.Column(db.String(120), nullable=False)
+    department = db.Column(db.String(80))
+    designation = db.Column(db.String(80))
+    joining_date = db.Column(db.Date)
+    separation_date = db.Column(db.Date, index=True)
+    separation_type = db.Column(db.String(30), nullable=False, default="Resignation")
+    # Resignation | Termination | Contract End | Retirement | Absconding | Other
+    reason = db.Column(db.Text)
+    notice_days = db.Column(db.Integer)
+    final_settlement_status = db.Column(db.String(20), default="Pending")
+    # Pending | In Process | Settled
+    settlement_amount = db.Column(db.Float, default=0.0)
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    @property
+    def tenure_years(self):
+        if self.joining_date and self.separation_date:
+            return round((self.separation_date - self.joining_date).days / 365.25, 1)
+        return None
+
+    @staticmethod
+    def voluntary_types():
+        return {"Resignation", "Retirement"}
+
+    @staticmethod
+    def involuntary_types():
+        return {"Termination", "Absconding"}
+
+
+class ReportTemplate(db.Model):
+    """Saved report filter sets per user."""
+    __tablename__ = "report_templates"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"), nullable=False, index=True)
+    report_key = db.Column(db.String(40), nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    params_json = db.Column(db.Text, nullable=False, default="{}")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ----- Retail-fixture specialisation registers (V3.1) -----
+
+class Certification(db.Model):
+    """Skills & certification register (HSE, trade licences, driving, ...)."""
+    __tablename__ = "certifications"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"), nullable=False, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    issuer = db.Column(db.String(120))
+    issue_date = db.Column(db.Date)
+    expiry_date = db.Column(db.Date, index=True)
+    notes = db.Column(db.String(300))
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Project(db.Model):
+    """Retail-fixture project / site (store fit-out, warehouse racking, ...)."""
+    __tablename__ = "projects"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(160), nullable=False)
+    client = db.Column(db.String(160))
+    location = db.Column(db.String(160))
+    status = db.Column(db.String(20), default="active", nullable=False)  # active|completed
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Deployment(db.Model):
+    """Employee deployed to a project/site with a site allowance."""
+    __tablename__ = "deployments"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"), nullable=False, index=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False, index=True)
+    from_date = db.Column(db.Date)
+    to_date = db.Column(db.Date)
+    site_allowance = db.Column(db.Float, default=0.0, nullable=False)
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    project = db.relationship("Project", backref=db.backref("deployments", lazy="dynamic"))
+
+
+class FacilityAssignment(db.Model):
+    """Accommodation & transport assignments for factory staff."""
+    __tablename__ = "facility_assignments"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"), nullable=False, index=True)
+    kind = db.Column(db.String(20), nullable=False, default="accommodation")  # accommodation|transport
+    location_or_route = db.Column(db.String(160))
+    monthly_cost = db.Column(db.Float, default=0.0, nullable=False)
+    from_date = db.Column(db.Date)
+    to_date = db.Column(db.Date)
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PPEIssue(db.Model):
+    """PPE & uniform issuance/return log."""
+    __tablename__ = "ppe_issues"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"), nullable=False, index=True)
+    item = db.Column(db.String(120), nullable=False)
+    size = db.Column(db.String(30))
+    qty = db.Column(db.Integer, default=1, nullable=False)
+    issued_date = db.Column(db.Date)
+    returned_date = db.Column(db.Date)
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class HSEIncident(db.Model):
+    """HSE incident log (injury, near miss, property damage, unsafe act)."""
+    __tablename__ = "hse_incidents"
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.Date, nullable=False, index=True)
+    location = db.Column(db.String(160))
+    employee_id = db.Column(db.String(20), db.ForeignKey("users.id"), nullable=True)
+    type = db.Column(db.String(30), nullable=False, default="Near Miss")
+    # Injury | Near Miss | Property Damage | Unsafe Act
+    severity = db.Column(db.String(20), default="Low", nullable=False)
+    # Low | Medium | High | Critical
+    description = db.Column(db.Text)
+    action_taken = db.Column(db.Text)
+    status = db.Column(db.String(20), default="Open", nullable=False)  # Open|Closed
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ContractorWorker(db.Model):
+    """Contractor / seasonal worker register with billing rate."""
+    __tablename__ = "contractor_workers"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    company = db.Column(db.String(120), nullable=False, index=True)
+    trade = db.Column(db.String(80))
+    site = db.Column(db.String(160))
+    start_date = db.Column(db.Date)
+    end_date = db.Column(db.Date)
+    monthly_rate = db.Column(db.Float, default=0.0, nullable=False)
+    status = db.Column(db.String(20), default="active", nullable=False)  # active|ended
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class AssetCustody(db.Model):
+    """Asset & tool custody register (V3.1.1).
+
+    Returnable assets (tools, IT assets, vehicles) issued to employees;
+    unreturned items surface in the separation register as a clearance warning.
+    """
+    __tablename__ = "asset_custody"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"), nullable=False, index=True)
+    item_name = db.Column(db.String(120), nullable=False)
+    category = db.Column(db.String(30), nullable=False, default="Tool")
+    # Tool | IT Asset | Vehicle | Other
+    serial_no = db.Column(db.String(80))
+    replacement_value = db.Column(db.Float, default=0.0, nullable=False)
+    issued_date = db.Column(db.Date)
+    returned_date = db.Column(db.Date)
+    status = db.Column(db.String(20), default="Issued", nullable=False)
+    # Issued | Returned | Lost
+    note = db.Column(db.String(300))
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    @property
+    def is_outstanding(self):
+        return self.status == "Issued" and not self.returned_date

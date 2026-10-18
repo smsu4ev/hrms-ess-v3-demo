@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <h2>{% if current_user.photo_path %}<img src="{{ url_for('docs.photo', uid=current_user.id) }}" alt="" style="height:48px;width:48px;object-fit:cover;border-radius:50%;vertical-align:middle;margin-right:8px">{% endif %}Welcome, {{ current_user.name }}</h2>
@@ -6,35 +7,35 @@
 
 <div class="tiles">
   <a class="tile" href="{{ url_for('views.leave') }}">
-    <span class="t-ico">&#128197;</span><span class="t-lbl">Apply Leave</span>
+    <span class="t-ico">{{ icon('calendar') }}</span><span class="t-lbl">Apply Leave</span>
     <div class="t-sub">Annual, sick, maternity & more (UAE)</div>
   </a>
   <a class="tile" href="{{ url_for('views.attendance') }}">
-    <span class="t-ico">&#128336;</span><span class="t-lbl">My Attendance</span>
+    <span class="t-ico">{{ icon('clock') }}</span><span class="t-lbl">My Attendance</span>
     <div class="t-sub">Monthly view</div>
   </a>
   <a class="tile" href="{{ url_for('views.regularisation') }}">
-    <span class="t-ico">&#9998;</span><span class="t-lbl">Regularisation</span>
+    <span class="t-ico">{{ icon('pencil') }}</span><span class="t-lbl">Regularisation</span>
     <div class="t-sub">Correct missed punches</div>
   </a>
   <a class="tile" href="{{ url_for('views.payslips') }}">
-    <span class="t-ico">&#128179;</span><span class="t-lbl">Payslips</span>
+    <span class="t-ico">{{ icon('card') }}</span><span class="t-lbl">Payslips</span>
     <div class="t-sub">Last 6 months</div>
   </a>
   {% if current_user.is_manager %}
   <a class="tile" href="{{ url_for('views.approvals') }}">
-    <span class="t-ico">&#9989;</span><span class="t-lbl">Approvals</span>
+    <span class="t-ico">{{ icon('check') }}</span><span class="t-lbl">Approvals</span>
     <div class="t-sub">Leave & regularisation</div>
     {% if approvals_pending %}<span class="t-badge">{{ approvals_pending }}</span>{% endif %}
   </a>
   {% endif %}
   {% if current_user.is_admin %}
   <a class="tile admin-tile" href="{{ url_for('hrms.employees') }}">
-    <span class="t-ico">&#128101;</span><span class="t-lbl">Employee Central</span>
+    <span class="t-ico">{{ icon('users') }}</span><span class="t-lbl">Employee Central</span>
     <div class="t-sub">HR records & master data</div>
   </a>
   <a class="tile admin-tile" href="{{ url_for('hrms.compliance') }}">
-    <span class="t-ico">&#9878;</span><span class="t-lbl">Compliance</span>
+    <span class="t-ico">{{ icon('scales') }}</span><span class="t-lbl">Compliance</span>
     <div class="t-sub">UAE labour law overview</div>
   </a>
   {% endif %}

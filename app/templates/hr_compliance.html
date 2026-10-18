@@ -61,6 +61,22 @@
   <button class="btn small primary" type="submit">Queue WhatsApp Reminders (expiring documents)</button>
 </form>
 
+<h3>Certification Expiries (next 60 days)</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Employee</th><th>Certification</th><th>Issuer</th><th>Expiry</th><th>Days Left</th></tr>
+  {% for r in cert_expiries %}
+  <tr>
+    <td>{{ r.user.name }} ({{ r.user.id }})</td><td>{{ r.cert.name }}</td>
+    <td>{{ r.cert.issuer or '-' }}</td><td>{{ r.cert.expiry_date }}</td>
+    <td><span class="badge {{ 'rejected' if r.days_left < 0 else 'pending' }}">{{ r.days_left }} days</span></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5" class="muted">No certification expiries in the next 60 days.</td></tr>
+  {% endfor %}
+</table>
+</div>
+
 <h3>Probation Ending (next 30 days - 6-month probation)</h3>
 <div class="tbl-wrap">
 <table class="tbl">

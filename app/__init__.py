@@ -52,6 +52,10 @@ def create_app():
     app.register_blueprint(hrms_bp)
     app.register_blueprint(docs_bp)
     app.register_blueprint(payroll_bp)
+    from app import reports  # noqa: E402  (v3.1 reports & export hub)
+    app.register_blueprint(reports.reports_bp)
+    from app import retail  # noqa: E402  (v3.1 retail-fixture registers)
+    app.register_blueprint(retail.retail_bp)
 
     @app.before_request
     def enforce_password_change():
@@ -73,6 +77,10 @@ def create_app():
             "default-src 'self'; style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data:; font-src 'self'; frame-ancestors 'none'"
         )
+        # v3.1: long-lived caching for static assets (fingerprinted app.js /
+        # style.css change with each deploy; repeat navigations stay fast).
+        if request.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         return response
 
     @app.context_processor
@@ -116,6 +124,8 @@ def create_app():
                 ("passport_no", "VARCHAR(40)"),
                 ("exit_date", "DATE"),
                 ("emirates_id_no", "VARCHAR(40)"),
+                ("separation_date", "DATE"),      # v3.1 separation register
+                ("separation_type", "VARCHAR(30)"),
             ]:
                 add_column("users", col, ddl)
             add_column("generated_letters", "has_salary_data", "BOOLEAN")

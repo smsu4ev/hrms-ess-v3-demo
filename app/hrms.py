@@ -64,6 +64,7 @@ EMPLOYEE_FIELDS = ["name", "department", "designation", "reporting_manager",
                    "emirates_id_expiry_date", "emirates_id_no", "passport_no",
                    "email", "mobile", "phone", "iban", "bank_name",
                    "visa_company_id", "exit_date",
+                   "separation_date", "separation_type",  # v3.1
                    "basic_salary", "monthly_salary"]
 
 EMPLOYMENT_STATUSES = ["active", "probation", "resigned", "terminated", "retired"]
@@ -231,6 +232,13 @@ def employee_edit(uid):
         user.bank_name = (request.form.get("bank_name") or "").strip() or None
         user.visa_company_id = int(request.form.get("visa_company_id") or 0) or None
         user.exit_date = parse_date(request.form.get("exit_date"))
+        # v3.1: separation register linkage (shown in the form when the
+        # employee is resigned/terminated)
+        user.separation_date = parse_date(request.form.get("separation_date"))
+        sep_type = (request.form.get("separation_type") or "").strip() or None
+        user.separation_type = sep_type if not sep_type or sep_type in (
+            "Resignation", "Termination", "Contract End", "Retirement",
+            "Absconding", "Other") else None
         try:
             user.basic_salary = float(request.form.get("basic_salary") or 0)
             user.monthly_salary = float(request.form.get("monthly_salary") or 0)
@@ -400,6 +408,15 @@ def compliance():
                              "user": User.query.get(d.user_id),
                              "days_left": (d.expiry_date - today).days})
     doc_expiries.sort(key=lambda r: r["days_left"])
+    # (d2) Certification expiries within 60 days (v3.1 retail registers).
+    from app.models import Certification
+    cert_expiries = []
+    for c in Certification.query.filter(
+            Certification.expiry_date.isnot(None),
+            Certification.expiry_date <= today + timedelta(days=60)).all():
+        cert_expiries.append({"cert": c, "user": User.query.get(c.user_id),
+                              "days_left": (c.expiry_date - today).days})
+    cert_expiries.sort(key=lambda r: r["days_left"])
     # (e) Rule-based insights (AI-assisted checks, no external calls).
     from app.payroll import compliance_insights, INSIGHT_LABEL
     insights = compliance_insights()
@@ -429,6 +446,7 @@ def compliance():
                            leave_types=app_config.LEAVE_TYPES,
                            hours_notes=WORKING_HOURS_NOTES,
                            doc_expiries=doc_expiries,
+                           cert_expiries=cert_expiries,
                            insights=insights,
                            insight_label=INSIGHT_LABEL)
 

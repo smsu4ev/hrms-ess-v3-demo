@@ -226,3 +226,37 @@ hr { border: none; border-top: 1px solid #e5e7eb; margin: 16px 0; }
   .cards { grid-template-columns: repeat(2, 1fr); }
   .content { padding: 20px; }
 }
+
+/* ---- v3.1: SVG icon set (replaces emoji icons) ---- */
+.ico { width: 22px; height: 22px; flex: none; }
+.nav-ico .ico { width: 20px; height: 20px; }
+.nav-ico { display: inline-flex; width: 26px; margin-right: 6px; align-items: center; justify-content: center; }
+.t-ico { display: flex; margin-bottom: 6px; color: var(--primary); }
+.t-ico .ico { width: 30px; height: 30px; }
+.bnav-ico { display: flex; margin-bottom: 3px; align-items: center; justify-content: center; }
+.bnav-ico .ico { width: 22px; height: 22px; }
+.h-ico { display: inline-flex; align-items: center; justify-content: center; }
+.h-ico .ico { width: 24px; height: 24px; }
+.hamburger .h-ico { color: #fff; }
+
+/* ---- v3.1: PJAX app-like navigation ---- */
+#pjax-progress { position: fixed; top: 0; left: 0; height: 3px; width: 0;
+  background: var(--primary, #5e72e4); z-index: 2000;
+  transition: width .25s ease, opacity .3s ease; opacity: 0; }
+#pjax-progress.on { opacity: 1; }
+#pjax-main { transition: opacity .15s ease; }
+#pjax-main.pjax-loading { opacity: .55; pointer-events: none; }
+
+/* Training matrix cell colours */
+.tbl.matrix td { font-size: 12px; }
+td.mx-valid { background: #e6f6ea; color: #1e7e34; font-weight: 600; }
+td.mx-expiring { background: #fff3cd; color: #856404; font-weight: 600; }
+td.mx-expired { background: #fde8e8; color: #a32020; font-weight: 700; }
+td.mx-none { color: #999; }
+.legend { list-style: none; padding: 0; display: flex; gap: 18px; flex-wrap: wrap; }
+.legend .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.dot.mx-valid { background: #1e7e34; }
+.dot.mx-expiring { background: #d39e00; }
+.dot.mx-expired { background: #a32020; }
+.dot.mx-none { background: #bbb; }
+span.warn { background: #fde8e8; color: #a32020; font-weight: 700; padding: 2px 8px; border-radius: 4px; font-size: 12px; }

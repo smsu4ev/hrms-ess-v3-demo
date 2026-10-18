@@ -210,11 +210,28 @@ def payslip(year, month):
 @login_required
 def profile():
     from app.uae import gratuity
+    from app.models import Certification, PPEIssue, Deployment, Project, AssetCustody
     est = None
     if current_user.joining_date and (current_user.basic_salary or 0) > 0:
         est = gratuity(current_user.joining_date, date.today(),
                        current_user.basic_salary, "employer")
-    return render_template("profile.html", gratuity_est=est)
+    my_certs = Certification.query.filter_by(
+        user_id=current_user.id).order_by(Certification.expiry_date).all()
+    my_ppe = PPEIssue.query.filter_by(
+        user_id=current_user.id).order_by(PPEIssue.issued_date.desc()).all()
+    my_assets = AssetCustody.query.filter_by(
+        user_id=current_user.id).order_by(
+        AssetCustody.returned_date.isnot(None),
+        AssetCustody.issued_date.desc()).all()
+    today = date.today()
+    my_deps = (Deployment.query.filter(
+        Deployment.user_id == current_user.id,
+        (Deployment.to_date.is_(None)) | (Deployment.to_date >= today))
+        .order_by(Deployment.from_date.desc()).all())
+    dep_projects = {p.id: p for p in Project.query.all()}
+    return render_template("profile.html", gratuity_est=est, my_certs=my_certs,
+                           my_ppe=my_ppe, my_deps=my_deps, my_assets=my_assets,
+                           dep_projects=dep_projects)
 
 
 # ---------------- My End-of-Service Estimate (employee) ----------------

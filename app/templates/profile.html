@@ -28,6 +28,57 @@
 </table>
 </div>
 <p class="muted">To update personal details, please contact HR.</p>
+
+{% if my_deps %}
+<h3>My Current Deployment</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Project</th><th>From</th><th>To</th><th>Site Allowance (AED)</th></tr>
+  {% for d in my_deps %}
+  <tr><td>{{ dep_projects[d.project_id].name if d.project_id in dep_projects else '-' }}</td>
+      <td>{{ d.from_date or '-' }}</td><td>{{ d.to_date or '-' }}</td>
+      <td>{{ "%.2f"|format(d.site_allowance or 0) }}</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+
+{% if my_certs %}
+<h3>My Certifications</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Certification</th><th>Issuer</th><th>Issued</th><th>Expires</th></tr>
+  {% for c in my_certs %}
+  <tr><td>{{ c.name }}</td><td>{{ c.issuer or '-' }}</td><td>{{ c.issue_date or '-' }}</td><td>{{ c.expiry_date or '-' }}</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+
+{% if my_ppe %}
+<h3>My PPE &amp; Uniform</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Item</th><th>Size</th><th>Qty</th><th>Issued</th><th>Returned</th></tr>
+  {% for i in my_ppe %}
+  <tr><td>{{ i.item }}</td><td>{{ i.size or '-' }}</td><td>{{ i.qty }}</td><td>{{ i.issued_date or '-' }}</td><td>{{ i.returned_date or '—' }}</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+
+{% if my_assets %}
+<h3>My Assets &amp; Tools in Custody</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Item</th><th>Category</th><th>Serial No</th><th>Issued</th><th>Returned</th><th>Status</th></tr>
+  {% for a in my_assets %}
+  <tr><td>{{ a.item_name }}</td><td>{{ a.category }}</td><td>{{ a.serial_no or '-' }}</td><td>{{ a.issued_date or '-' }}</td><td>{{ a.returned_date or '—' }}</td><td>{{ a.status }}</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+
 {% if gratuity_est %}
 <div class="formcard">
   <h3>My End-of-Service Estimate</h3>
