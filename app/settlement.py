@@ -14,7 +14,8 @@ from flask_login import login_required, current_user
 
 from app import db
 from app.models import (User, FinalSettlement, SettlementLine, SeparationRecord,
-                        Loan, LeaveBalance, PPEIssue, LeaveRequest, AssetCustody)
+                        Loan, LeaveBalance, PPEIssue, LeaveRequest, AssetCustody,
+                        AttendanceRecord)
 from app.audit import record
 from app.hrms import hr_required
 from app import uae
@@ -25,6 +26,31 @@ settlement_bp = Blueprint("settlement", __name__, url_prefix="/hrms")
 
 SEPARATION_TYPES = ["Resignation", "Termination", "Contract End",
                     "Retirement", "Absconding", "Other"]
+
+
+def unpaid_absence_days(user_id, start, end):
+    """Days excluded from gratuity service (Art. 51): approved unpaid leave
+    days + unexcused absence days (AttendanceRecord status 'absent') between
+    joining and the last working day."""
+    if not start or not end or end < start:
+        return 0
+    n = 0
+    for r in (LeaveRequest.query
+              .filter(LeaveRequest.user_id == user_id,
+                      LeaveRequest.leave_type == "unpaid",
+                      LeaveRequest.status == "approved",
+                      LeaveRequest.start_date <= end,
+                      LeaveRequest.end_date >= start).all()):
+        lo = max(r.start_date, start)
+        hi = min(r.end_date, end)
+        if hi >= lo:
+            n += (hi - lo).days + 1
+    n += (AttendanceRecord.query
+          .filter(AttendanceRecord.user_id == user_id,
+                  AttendanceRecord.status == "absent",
+                  AttendanceRecord.date >= start,
+                  AttendanceRecord.date <= end).count())
+    return n
 
 
 def fixed_earnings_total(user_id, as_of):
@@ -54,13 +80,24 @@ def calculate_lines(st):
     basis = "resignation" if st.separation_type == "Resignation" else "employer"
     lines = []
 
-    # 1. End-of-service gratuity (reuses the statutory calculator).
-    g = uae.gratuity(u.joining_date, lwd, basic, basis)
+    # 1. End-of-service gratuity (reuses the statutory calculator, Art. 51).
+    # Unpaid absence days are excluded from the service period.
+    unpaid_n = unpaid_absence_days(st.user_id, u.joining_date, lwd)
+    st.unpaid_days_used = unpaid_n
+    g = uae.gratuity(u.joining_date, lwd, basic, basis, unpaid_days=unpaid_n)
+    label = (f"End-of-service gratuity \u2014 {g['effective_service_days']} service "
+             f"days ({g['years_of_service']} yrs)")
+    if unpaid_n > 0:
+        lines.append({
+            "label": f"Note: {unpaid_n:.0f} unpaid absence day(s) excluded from "
+                     f"gratuity service (Art. 51)",
+            "kind": "info", "amount": 0.0,
+            "note": "Approved unpaid leave + unexcused absences"})
     lines.append({
-        "label": f"End-of-service gratuity \u2014 {basis} "
-                 f"({g['years_of_service']} yrs of service)",
+        "label": label,
         "kind": "payable", "amount": g["amount"],
-        "note": "UAE Labour Law, Art. 51 (statutory calculator)"})
+        "note": "UAE Labour Law, Art. 51 — full entitlement on resignation after "
+                "1 year (1980-law scale repealed)"})
 
     # 2. Annual leave encashment: remaining balance x basic/30.
     lb = LeaveBalance.query.filter_by(user_id=st.user_id,
@@ -103,7 +140,22 @@ def calculate_lines(st):
             "kind": kind, "amount": amt,
             "note": f"AED {total_fixed:.2f} / 30 x {st.notice_days}"})
 
-    # 6. Manual adjustments (entered before Calculate).
+    # 6. Repatriation ticket (structured option).
+    ticket = st.ticket_option or "none"
+    if ticket == "cash" and (st.ticket_amount or 0) > 0:
+        lines.append({"label": "Repatriation ticket (cash in lieu)",
+                      "kind": "payable", "amount": round(st.ticket_amount, 2),
+                      "note": ""})
+    elif ticket == "booked":
+        lines.append({"label": "Repatriation ticket: company-booked",
+                      "kind": "info", "amount": 0.0,
+                      "note": "Ticket arranged by the company — no cash line"})
+    elif ticket == "na":
+        lines.append({"label": "Repatriation ticket: not applicable",
+                      "kind": "info", "amount": 0.0,
+                      "note": ""})
+
+    # 7. Manual adjustments (entered before Calculate).
     for m in (SettlementLine.query.filter_by(settlement_id=st.id, is_manual=True)
                                   .order_by(SettlementLine.id).all()):
         lines.append({"label": f"{m.label} (manual adjustment)",
@@ -169,12 +221,20 @@ def new():
             direction = f.get("notice_direction") or "none"
             if direction not in ("company_pays", "employee_pays", "none"):
                 direction = "none"
+            ticket = f.get("ticket_option") or "none"
+            if ticket not in ("none", "cash", "booked", "na"):
+                ticket = "none"
+            try:
+                ticket_amt = max(0.0, float(f.get("ticket_amount") or 0))
+            except ValueError:
+                ticket_amt = 0.0
             _, _, _, sep_rec_id = _prefill(uid)
             st = FinalSettlement(
                 user_id=uid, separation_record_id=sep_rec_id,
                 last_working_day=lwd, separation_type=sep_type,
                 reason=(f.get("reason") or "").strip() or None,
                 notice_days=notice, notice_direction=direction,
+                ticket_option=ticket, ticket_amount=round(ticket_amt, 2),
                 status="draft", created_by=current_user.id)
             db.session.add(st)
             record("settlement_created",
@@ -298,6 +358,9 @@ def mark_paid(sid):
     st = FinalSettlement.query.get_or_404(sid)
     if st.status != "approved":
         flash("Only an approved settlement can be marked paid.", "error")
+    elif not st.cancellation_doc_path:
+        flash("Upload the signed MOHRE cancellation / EOS receipt before marking "
+              "this settlement as paid.", "error")
     else:
         st.status = "paid"
         st.paid_at = datetime.utcnow()
@@ -307,6 +370,67 @@ def mark_paid(sid):
         db.session.commit()
         flash("Settlement marked as paid.", "success")
     return redirect(url_for("settlement.detail", sid=sid))
+
+
+@settlement_bp.route("/settlements/<int:sid>/receipt", methods=["POST"])
+@login_required
+@hr_required
+def upload_receipt(sid):
+    """Upload the signed MOHRE cancellation / EOS receipt (required for Paid)."""
+    import os
+    from app.files import valid_document, store_file, upload_root
+    st = FinalSettlement.query.get_or_404(sid)
+    if st.status not in ("approved", "calculated"):
+        flash("A receipt can only be attached to a calculated/approved settlement.",
+              "error")
+        return redirect(url_for("settlement.detail", sid=sid))
+    file = request.files.get("receipt")
+    if not file or not file.filename:
+        flash("Choose a file to upload.", "error")
+        return redirect(url_for("settlement.detail", sid=sid))
+    data = file.read()
+    kind, err = valid_document(data, file.filename)
+    if err:
+        flash(err, "error")
+        return redirect(url_for("settlement.detail", sid=sid))
+    # Remove the previous receipt file if one was replaced.
+    if st.cancellation_doc_path:
+        try:
+            os.remove(os.path.join(upload_root(), "settlement_receipts",
+                                   os.path.basename(st.cancellation_doc_path)))
+        except OSError:
+            pass
+    st.cancellation_doc_path = store_file(
+        data, "settlement_receipts", "jpg" if kind == "jpg" else kind)
+    record("settlement_receipt_uploaded", f"{st.user_id}: cancellation receipt",
+           entity="settlement", entity_id=st.id)
+    db.session.commit()
+    flash("Signed cancellation receipt uploaded.", "success")
+    return redirect(url_for("settlement.detail", sid=sid))
+
+
+@settlement_bp.route("/settlements/<int:sid>/receipt", methods=["GET"])
+@login_required
+@hr_required
+def view_receipt(sid):
+    """Serve the signed cancellation receipt (admin/salary-permission, audited)."""
+    import os
+    from app.files import read_file
+    from flask import send_file
+    import io
+    st = FinalSettlement.query.get_or_404(sid)
+    if not st.cancellation_doc_path:
+        abort(404)
+    data = read_file("settlement_receipts",
+                     os.path.basename(st.cancellation_doc_path))
+    if not data:
+        abort(404)
+    record("settlement_receipt_viewed", f"{st.user_id}: cancellation receipt",
+           entity="settlement", entity_id=st.id)
+    db.session.commit()
+    ext = st.cancellation_doc_path.rsplit(".", 1)[-1].lower()
+    mime = {"pdf": "application/pdf", "png": "image/png"}.get(ext, "image/jpeg")
+    return send_file(io.BytesIO(data), mimetype=mime)
 
 
 @settlement_bp.route("/settlements/<int:sid>/adjustments", methods=["POST"])

@@ -43,6 +43,22 @@
 <hr>
 <form method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="toggle_hr_staff">
+  <p>HR Staff (can create employees via the approval matrix; acts on HR Staff approval steps):
+     <strong>{{ 'Yes' if user.is_hr_staff else 'No' }}</strong></p>
+  <button class="btn" type="submit">{{ 'Clear' if user.is_hr_staff else 'Set' }} HR Staff Flag</button>
+</form>
+<hr>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="toggle_hr_manager">
+  <p>HR Manager (approves employee creation and HR Manager approval steps):
+     <strong>{{ 'Yes' if user.is_hr_manager else 'No' }}</strong></p>
+  <button class="btn" type="submit">{{ 'Clear' if user.is_hr_manager else 'Set' }} HR Manager Flag</button>
+</form>
+<hr>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="action" value="set_role">
   <label>Role
     <select name="role">

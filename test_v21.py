@@ -49,9 +49,25 @@ def logout():
 today = date.today()
 r = gratuity(today - timedelta(days=7 * 365), today, 3000.0, "employer")
 check("gratuity reference: 7yr employer = 16500", r["amount"] == 16500.0, r["amount"])
+# Federal Decree-Law 33/2021, Art. 51 (in force 2 Feb 2022): the 1980-law
+# resignation scale (1/3 for 1-3 yrs, 2/3 for 3-5 yrs) was REPEALED. A
+# resigning employee with >= 1 year gets FULL gratuity, like termination.
 r = gratuity(today - timedelta(days=4 * 365), today, 3000.0, "resignation")
-check("gratuity resignation 4yr = 2/3 of 84 days * 100 = 5600",
-      r["amount"] == 5600.0 and r["multiplier"] == round(2 / 3, 4), r["amount"])
+check("gratuity resignation 4yr = full 84 days * 100 = 8400 (Art. 51)",
+      r["amount"] == 8400.0 and r["multiplier"] == 1.0, r["amount"])
+r2 = gratuity(today - timedelta(days=4 * 365), today, 3000.0, "employer")
+check("gratuity resignation == termination for identical inputs",
+      r["amount"] == r2["amount"], r["amount"])
+# 4yrs service, 2 unpaid years -> effective 2yrs -> 42 days x 100 = 4200
+r3 = gratuity(today - timedelta(days=4 * 365), today, 3000.0, "resignation",
+             unpaid_days=2 * 365)
+check("gratuity excludes unpaid absence days (Art. 51): 4200",
+      r3["amount"] == 4200.0 and r3["unpaid_days_excluded"] == 2 * 365,
+      r3["amount"])
+r4 = gratuity(today - timedelta(days=4 * 365), today, 3000.0, "resignation",
+             unpaid_days=4 * 365)
+check("gratuity: unpaid days pushing service below 1 year -> 0",
+      r4["amount"] == 0.0, r4["amount"])
 r = gratuity(today - timedelta(days=200), today, 3000.0, "employer")
 check("gratuity under 1 year = 0", r["amount"] == 0.0, r["amount"])
 

@@ -91,6 +91,20 @@ def user_detail(uid):
             flash(f"Salary visibility for {uid}: "
                   f"{'granted' if user.can_view_salary else 'revoked'}.",
                   "success")
+        elif action == "toggle_hr_staff":
+            user.is_hr_staff = not user.is_hr_staff
+            log_action(current_user.id, "hr_staff_toggled",
+                       f"{uid} is_hr_staff={user.is_hr_staff}")
+            db.session.commit()
+            flash(f"HR Staff flag for {uid}: "
+                  f"{'set' if user.is_hr_staff else 'cleared'}.", "success")
+        elif action == "toggle_hr_manager":
+            user.is_hr_manager = not user.is_hr_manager
+            log_action(current_user.id, "hr_manager_toggled",
+                       f"{uid} is_hr_manager={user.is_hr_manager}")
+            db.session.commit()
+            flash(f"HR Manager flag for {uid}: "
+                  f"{'set' if user.is_hr_manager else 'cleared'}.", "success")
         elif action == "set_role":
             role = request.form.get("role", "")
             if role in ("employee", "manager", "admin"):

@@ -16,6 +16,7 @@
   <div class="userbox">
     <span class="uname">{{ current_user.name }} <span class="uid">({{ current_user.id }})</span></span>
     <span class="badge {{ current_user.role }}">{{ current_user.role }}</span>
+    <a href="{{ url_for('engagement.notifications') }}" class="bell" aria-label="Notifications"><span class="nav-ico">{{ icon('bell') }}</span>{% if unread_count %}<span class="nbadge">{{ unread_count }}</span>{% endif %}</a>
     <form method="post" action="{{ url_for('auth.logout') }}" style="display:inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn small ghost">Logout</button>
@@ -36,6 +37,9 @@
     <a href="{{ url_for('views.profile') }}"><span class="nav-ico">{{ icon('user') }}</span><span class="nav-txt">My Profile</span></a>
     <a href="{{ url_for('docs.my_documents') }}"><span class="nav-ico">{{ icon('file') }}</span><span class="nav-txt">My Documents</span></a>
     <a href="{{ url_for('views.my_gratuity') }}"><span class="nav-ico">{{ icon('money') }}</span><span class="nav-txt">EOS Gratuity</span></a>
+    <a href="{{ url_for('engagement.my_training') }}"><span class="nav-ico">{{ icon('graduation') }}</span><span class="nav-txt">My Training</span></a>
+    <a href="{{ url_for('engagement.my_jd') }}"><span class="nav-ico">{{ icon('file') }}</span><span class="nav-txt">My Job Description</span></a>
+    <a href="{{ url_for('engagement.celebrations') }}"><span class="nav-ico">{{ icon('star') }}</span><span class="nav-txt">Celebrations</span></a>
     {% if current_user.is_manager %}
     <div class="navhead">Manager</div>
     <a href="{{ url_for('views.approvals') }}"><span class="nav-ico">{{ icon('check') }}</span><span class="nav-txt">Leave Approvals</span></a>
@@ -81,9 +85,16 @@
     <a href="{{ url_for('hrms.onboarding') }}"><span class="nav-ico">{{ icon('graduation') }}</span><span class="nav-txt">Onboarding</span></a>
     <a href="{{ url_for('reports.hub') }}"><span class="nav-ico">{{ icon('report') }}</span><span class="nav-txt">Reports &amp; Exports</span></a>
     <a href="{{ url_for('admin.users') }}"><span class="nav-ico">{{ icon('user') }}</span><span class="nav-txt">Manage Users</span></a>
+    <a href="{{ url_for('approvals.matrix_admin') }}"><span class="nav-ico">{{ icon('check') }}</span><span class="nav-txt">Approval Matrix</span></a>
     <a href="{{ url_for('admin.audit') }}"><span class="nav-ico">{{ icon('report') }}</span><span class="nav-txt">Audit Log</span></a>
     <a href="{{ url_for('admin.attendance_import') }}"><span class="nav-ico">{{ icon('download') }}</span><span class="nav-txt">Import Attendance</span></a>
     <a href="{{ url_for('admin.outbox') }}"><span class="nav-ico">{{ icon('phone') }}</span><span class="nav-txt">WhatsApp Outbox</span></a>
+    <div class="navhead">Engagement</div>
+    <a href="{{ url_for('engagement.locations') }}"><span class="nav-ico">{{ icon('building') }}</span><span class="nav-txt">Work Locations</span></a>
+    <a href="{{ url_for('engagement.hr_punches') }}"><span class="nav-ico">{{ icon('clock') }}</span><span class="nav-txt">Punch Records</span></a>
+    <a href="{{ url_for('engagement.notices') }}"><span class="nav-ico">{{ icon('bell') }}</span><span class="nav-txt">Notices</span></a>
+    <a href="{{ url_for('engagement.hr_training') }}"><span class="nav-ico">{{ icon('graduation') }}</span><span class="nav-txt">Training Courses</span></a>
+    <a href="{{ url_for('engagement.jds') }}"><span class="nav-ico">{{ icon('file') }}</span><span class="nav-txt">Job Descriptions</span></a>
     {% endif %}
   </nav>
   <main class="content" id="pjax-main" data-pjax>

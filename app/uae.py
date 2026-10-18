@@ -7,17 +7,20 @@ End-of-Service Gratuity — calculation rules and DOCUMENTED SIMPLIFICATIONS:
   3. Accrual: 21 days' wage per year of service for the first 5 years,
      30 days' wage per year beyond 5 years, pro-rated for partial years (Art. 51).
   4. No gratuity for service of one year or less (Art. 51(3)).
-  5. Cap: total gratuity may not exceed 2 years' total wage (Art. 52).
-  6. Separation basis (documented interpretation of the widely applied rules):
-     - Termination by the employer, or expiry/non-renewal of a fixed-term
-       contract: full accrual (100%).
-     - Employee resignation: service under 1 year -> 0%; 1 to under 3 years -> 1/3;
-       3 to under 5 years -> 2/3; 5 years and above -> 100%.
-       (This mirrors the pre-2022 limited-contract scale still widely referenced
-       by UAE payroll practice and legal advisories for resignation cases.)
-  7. Special cases (death, ill-health, contract breach by employer, probation
-     terminations, mutual agreement, unlimited-contract nuances) are NOT modelled —
-     they must be checked against the current law before payment.
+  5. Cap: total gratuity may not exceed 2 years' basic wage (24 months of basic),
+     the mainstream practice applied for Art. 51(7).
+  6. Separation basis — Federal Decree-Law 33/2021, Art. 51 (in force since
+     2 Feb 2022): once the employee has completed at least 1 year of continuous
+     service, the FULL statutory gratuity is due whether the employee resigned
+     or the employer terminated the contract. The 1980-law resignation scale
+     (<1 yr 0, 1-3 yrs 1/3, 3-5 yrs 2/3, 5+ yrs full) was REPEALED with the old
+     law and is deliberately NOT applied here. `separation_type` is accepted
+     for reporting/back-compat only and does not change the result.
+  7. Unpaid absence: days of absence without pay are NOT counted in the period
+     of service (Art. 51). Pass them as `unpaid_days`.
+  8. Special cases (death, ill-health, contract breach by employer, probation
+     terminations, mutual agreement) are NOT modelled — they must be checked
+     against the current law before payment.
 
 Reference check encoded in tests: basic AED 3,000, exactly 7 years' service,
 employer termination -> (5x21 + 2x30) = 165 days x AED 100/day = AED 16,500.
@@ -40,23 +43,29 @@ def service_days(joining_date, last_working_date):
     return (last_working_date - joining_date).days
 
 
-def gratuity(joining_date, last_working_date, monthly_basic, separation_type="employer"):
-    """Calculate end-of-service gratuity.
+def gratuity(joining_date, last_working_date, monthly_basic, separation_type="employer",
+           unpaid_days=0):
+    """Calculate end-of-service gratuity under Federal Decree-Law 33/2021, Art. 51.
 
     Args:
         joining_date: employee's joining date (datetime.date)
         last_working_date: last working date (datetime.date)
         monthly_basic: last-drawn basic monthly salary (AED)
-        separation_type: "employer" (termination by employer / contract expiry)
-            or "resignation" (employee resigned).
+        separation_type: accepted for reporting/back-compat only — since
+            2 Feb 2022 resignation and employer termination accrue the SAME
+            full gratuity (the 1980-law 1/3-2/3 scale was repealed).
+        unpaid_days: days of absence without pay (unpaid leave + unexcused
+            absences), excluded from the service period per Art. 51.
 
     Returns a dict with the full breakdown. Amounts are rounded to 2 decimals.
     """
     days = service_days(joining_date, last_working_date)
+    # Art. 51: unpaid absence days do not count in the service period.
+    effective = max(days - (unpaid_days or 0), 0)
     # Commercial 365-day year basis (keeps exact whole-year cases exact).
-    years_exact = days / 365.0
+    years_exact = effective / 365.0
     full_years = int(years_exact)
-    remaining_days = days - full_years * 365.0
+    remaining_days = effective - full_years * 365.0
 
     daily = daily_basic_wage(monthly_basic)
 
@@ -68,28 +77,19 @@ def gratuity(joining_date, last_working_date, monthly_basic, separation_type="em
 
     base_amount = accrual_days * daily
 
-    # Separation multiplier (documented interpretation).
-    if days <= 365:
-        multiplier = 0.0
-    elif separation_type == "resignation":
-        if years_exact >= 5:
-            multiplier = 1.0
-        elif years_exact >= 3:
-            multiplier = 2.0 / 3.0
-        elif years_exact >= 1:
-            multiplier = 1.0 / 3.0
-        else:
-            multiplier = 0.0
-    else:  # employer termination / contract expiry
-        multiplier = 1.0
+    # Full entitlement once 1 year of effective service is completed —
+    # no reduction for resignation (FDL 33/2021, Art. 51).
+    multiplier = 0.0 if effective <= 365 else 1.0
 
     gross = base_amount * multiplier
-    # Cap at 2 years' total wage.
+    # Cap at 2 years' basic wage (mainstream practice for Art. 51(7)).
     cap = (monthly_basic or 0.0) * 24.0
     amount = min(gross, cap)
 
     return {
         "service_days": days,
+        "unpaid_days_excluded": unpaid_days or 0,
+        "effective_service_days": effective,
         "years_of_service": round(years_exact, 2),
         "full_years": full_years,
         "daily_wage": round(daily, 2),

@@ -68,7 +68,7 @@
   </tr>
   {% for r in rows %}
   <tr>
-    <td style="white-space:nowrap"><strong>{{ r.user.name }}</strong><br><span class="muted">{{ r.user.id }} &middot; {{ r.user.department or '' }}</span></td>
+    <td style="white-space:nowrap"><strong>{{ r.user.name }}</strong>{% if r.no_rest %} <span class="chip chip-warn">No weekly rest</span>{% endif %}<br><span class="muted">{{ r.user.id }} &middot; {{ r.user.department or '' }}</span></td>
     {% for c in r.cells %}
     <td class="roster-cell">
       {% if c.assignment %}

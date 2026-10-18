@@ -2,9 +2,11 @@
 {% block title %}Gratuity Calculator{% endblock %}
 {% block content %}
 <h2>End-of-Service Gratuity Calculator</h2>
-<p class="muted">Federal Decree-Law 33/2021: daily basic = monthly basic / 30; 21 days/year for the
-   first 5 years, 30 days/year beyond; pro-rated for partial years; capped at 2 years' total
-   wage. Resignation scale: &lt;1 yr = 0, 1-3 yrs = 1/3, 3-5 yrs = 2/3, 5+ yrs = full.
+<p class="muted">Federal Decree-Law 33/2021, Art. 51: daily basic = monthly basic / 30; 21 days/year
+   for the first 5 years, 30 days/year beyond; pro-rated for partial years; capped at 2 years'
+   basic wage. <strong>Resignation no longer reduces gratuity</strong> - the employee gets the
+   full accrual after 1 year of service, same as employer termination (the pre-2022
+   1/3 - 2/3 scale was repealed). Unpaid absence days are excluded from the service period.
    Assumptions are documented in the code (app/uae.py) - verify against current law.</p>
 <div class="twocol">
 <div>
@@ -25,7 +27,7 @@
   <label>Separation Type
     <select name="separation">
       <option value="employer" {% if form.separation == 'employer' %}selected{% endif %}>Termination by employer / contract expiry (full)</option>
-      <option value="resignation" {% if form.separation == 'resignation' %}selected{% endif %}>Employee resignation (scaled)</option>
+      <option value="resignation" {% if form.separation == 'resignation' %}selected{% endif %}>Employee resignation (full after 1 year - Art. 51)</option>
     </select>
   </label>
   <button class="btn primary" type="submit">Calculate</button>

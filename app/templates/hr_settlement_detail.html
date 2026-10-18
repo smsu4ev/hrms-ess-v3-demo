@@ -4,7 +4,11 @@
 <h2>Final Settlement #{{ st.id }}</h2>
 <p class="muted"><strong>{{ u.name if u else st.user_id }}</strong> ({{ st.user_id }})
    &middot; {{ st.separation_type }} &middot; Last working day {{ st.last_working_day.isoformat() if st.last_working_day else '—' }}
-   &middot; Status: <span class="chip">{{ st.status }}</span></p>
+   &middot; Status: <span class="chip">{{ st.status }}</span>
+   {% if st.payment_due_date %}&middot; Payable by <strong>{{ st.payment_due_date.isoformat() }}</strong>
+   (14 days from last working day — Art. 53){% endif %}
+   {% if st.is_overdue %}<span class="chip chip-warn">OVERDUE</span>{% endif %}
+   {% if st.status in ('calculated','approved','paid') and st.net < 0 %}<span class="chip chip-warn">Recovery required</span>{% endif %}</p>
 {% if st.reason %}<p class="muted">Reason: {{ st.reason }}</p>{% endif %}
 
 {% if st.status in ('calculated','approved','paid') %}
@@ -15,7 +19,11 @@
        Employee: <strong>{{ u.name if u else st.user_id }} ({{ st.user_id }})</strong><br>
        Designation: {{ u.designation if u else '' }} &middot; Department: {{ u.department if u else '' }}<br>
        Last Working Day: {{ st.last_working_day.isoformat() if st.last_working_day else '' }} &middot;
-       Separation: {{ st.separation_type }} &middot; Status: {{ st.status|upper }}</p>
+       Separation: {{ st.separation_type }} &middot; Status: {{ st.status|upper }}<br>
+       Payable by: <strong>{{ st.payment_due_date.isoformat() if st.payment_due_date else '' }}</strong>
+       (Art. 53 — within 14 days of contract end)
+       {% if st.is_overdue %}&middot; <strong style="color:#a12222">OVERDUE</strong>{% endif %}
+       {% if st.net < 0 %}&middot; <strong style="color:#a12222">Recovery required</strong>{% endif %}</p>
   </div>
   <table class="tbl">
     <tr><th>#</th><th>Particulars</th><th>Payable (AED)</th><th>Recoverable (AED)</th></tr>
@@ -96,6 +104,18 @@
   </form>
   <p class="muted">Note: the settlement creator cannot approve their own settlement (segregation of duties).</p>
   {% elif st.status == 'approved' %}
+  <div class="formcard">
+    <h3>Signed cancellation receipt (required before Mark Paid)</h3>
+    {% if st.cancellation_doc_path %}
+    <p><a class="btn" href="{{ url_for('settlement.view_receipt', sid=st.id) }}" target="_blank">View uploaded receipt</a></p>
+    {% endif %}
+    <form method="post" action="{{ url_for('settlement.upload_receipt', sid=st.id) }}" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>MOHRE cancellation / EOS receipt (PDF, JPG or PNG) <input type="file" name="receipt" accept=".pdf,.jpg,.jpeg,.png" {% if not st.cancellation_doc_path %}required{% endif %}></label>
+      <button class="btn" type="submit">Upload Receipt</button>
+    </form>
+    {% if not st.cancellation_doc_path %}<p class="muted">Mark Paid is blocked until a signed receipt is uploaded.</p>{% endif %}
+  </div>
   <form method="post" action="{{ url_for('settlement.mark_paid', sid=st.id) }}" style="display:inline" onsubmit="return confirm('Mark this settlement as paid?')">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button class="btn primary" type="submit">Mark Paid</button>

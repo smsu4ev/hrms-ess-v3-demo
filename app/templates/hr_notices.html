@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Notices{% endblock %}
+{% block content %}
+<h2>Notices</h2>
+{% if current_user.is_admin %}
+<div class="formcard">
+  <h3>Publish a notice</h3>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="create">
+    <label>Title <input type="text" name="title" maxlength="200" required></label>
+    <label>Message <textarea name="body" rows="4" required></textarea></label>
+    <label>Audience
+      <select name="audience">
+        <option value="all">Everyone</option>
+        {% for d in departments %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Expires (optional) <input type="date" name="expires_at"></label>
+    <label class="check"><input type="checkbox" name="requires_ack"> Mandatory read — employees must acknowledge</label>
+    <button class="btn primary" type="submit">Publish</button>
+  </form>
+</div>
+{% endif %}
+{% for n in notices %}
+<div class="formcard">
+  <h3>{{ n.title }}
+    {% if n.requires_ack %}<span class="badge pending">Mandatory read</span>{% endif %}
+    <span class="muted small">{{ 'Everyone' if n.audience == 'all' else n.audience }} &middot; {{ n.created_at.strftime('%d %b %Y') }}</span>
+  </h3>
+  <p>{{ n.body | e | replace('\n', '<br>') | safe }}</p>
+  {% if n.requires_ack and ack_info.get(n.id) %}
+  {% set ai = ack_info[n.id] %}
+  <p>Acknowledged: <strong>{{ ai.acknowledged }} / {{ ai.total }}</strong></p>
+  {% if ai.pending %}
+  <details><summary>Not yet acknowledged ({{ ai.pending|length }})</summary>
+    <ul>{% for u in ai.pending %}<li>{{ u.name }} ({{ u.id }})</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+  {% endif %}
+  {% if current_user.is_admin %}
+  <form method="post" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="delete">
+    <input type="hidden" name="id" value="{{ n.id }}">
+    <button class="btn small danger" type="submit" onclick="return confirm('Delete this notice?')">Delete</button>
+  </form>
+  {% endif %}
+</div>
+{% else %}
+<p class="muted">No notices yet.</p>
+{% endfor %}
+{% endblock %}

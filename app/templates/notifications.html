@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block content %}
+<h2>Notifications</h2>
+{% if items %}
+<form method="post" action="{{ url_for('engagement.notifications_read_all') }}" style="margin-bottom:10px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button class="btn small" type="submit">Mark all as read</button>
+</form>
+<div class="notif-list">
+{% for n in items %}
+  <div class="notif {% if not n.is_read %}unread{% endif %}">
+    <div class="notif-kind badge {{ n.kind }}">{{ n.kind }}</div>
+    <div class="notif-body">
+      <strong>{{ n.title }}</strong>
+      {% if n.body %}<p class="muted">{{ n.body }}</p>{% endif %}
+      <span class="muted small">{{ n.created_at.strftime('%d %b %Y %H:%M') }}</span>
+    </div>
+    <form method="post" action="{{ url_for('engagement.notification_read', nid=n.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn small" type="submit">{% if n.is_read %}Open{% else %}Read{% endif %}</button>
+    </form>
+  </div>
+{% endfor %}
+</div>
+{% else %}
+<p class="muted">No notifications yet.</p>
+{% endif %}
+{% endblock %}

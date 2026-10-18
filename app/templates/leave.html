@@ -31,7 +31,8 @@
     <td>{{ leave_types[r.leave_type].label if r.leave_type in leave_types else r.leave_type }}</td>
     <td>{{ r.start_date }} to {{ r.end_date }}</td>
     <td>{{ r.days }}</td>
-    <td><span class="badge {{ r.status }}">{{ r.status }}</span></td>
+    <td><span class="badge {{ r.status }}">{{ r.status }}</span>
+      {% if badges.get(r.id) %}<br><span class="chip">{{ badges.get(r.id) }}</span>{% endif %}</td>
     <td>{% if r.status == 'pending' %}
       <form method="post" action="{{ url_for('views.cancel_leave', req_id=r.id) }}" style="display:inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -50,7 +51,7 @@
     <dt>{{ t.label }} ({{ t.entitled }})</dt><dd>{{ t.note }}</dd>
     {% endfor %}
   </dl>
-  <p class="muted">Federal Decree-Law 33/2021 &amp; Cabinet Resolution 1/2022. Bereavement: 5 days for spouse, 3 days for parent, child, sibling, grandparent or grandchild.</p>
+  <p class="muted">Federal Decree-Law 33/2021 &amp; Cabinet Resolution 1/2022. Bereavement: 5 days for spouse, 3 days for parent, child, sibling, grandparent or grandchild. Sick leave is granted against an approved medical certificate and is not tracked as a balance here.</p>
 </div>
 </div>
 </div>

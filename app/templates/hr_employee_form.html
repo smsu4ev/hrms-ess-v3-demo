@@ -3,6 +3,8 @@
 {% block content %}
 <h2>{% if user %}Edit Employee {{ user.id }} - {{ user.name }}{% else %}Add Employee{% endif %}</h2>
 {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+{% if not user and creator_is_hr_staff %}<div class="flash">As HR staff, the record you create goes to the HR Manager for
+review and approval before it becomes active. Salary fields are set by the HR Manager afterwards.</div>{% endif %}
 <div class="formcard">
 <form method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -21,6 +23,7 @@
     </select>
   </label>
   <label>Joining Date <input type="date" name="joining_date" value="{{ user.joining_date if user and user.joining_date }}"></label>
+  <label>Date of Birth <input type="date" name="date_of_birth" value="{{ user.date_of_birth if user and user.date_of_birth }}"></label>
   <label>Employment Status
     <select name="employment_status">
       {% for s in statuses %}

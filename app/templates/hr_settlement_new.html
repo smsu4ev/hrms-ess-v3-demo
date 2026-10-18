@@ -30,6 +30,15 @@
         <option value="employee_pays">Employee owes company</option>
       </select>
     </label>
+    <label>Repatriation Ticket
+      <select name="ticket_option">
+        <option value="none" selected>None</option>
+        <option value="cash">Cash in lieu (payable)</option>
+        <option value="booked">Company booked</option>
+        <option value="na">Not applicable</option>
+      </select>
+    </label>
+    <label>Ticket Amount (AED, for cash in lieu) <input type="number" step="0.01" min="0" name="ticket_amount" value="0"></label>
     <label>Reason <input type="text" name="reason" maxlength="300" value="{{ reason or '' }}"></label>
     <button class="btn primary" type="submit">Create Draft</button>
     <a class="btn" href="{{ url_for('settlement.settlements') }}">Cancel</a>

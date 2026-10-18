@@ -5,3 +5,4 @@ flask-wtf>=1.2
 flask-limiter>=3.5
 gunicorn>=21.2
 openpyxl>=3.1  # only needed for seed.py
+Pillow>=10.0  # v3.3: punch selfie + signature image resizing

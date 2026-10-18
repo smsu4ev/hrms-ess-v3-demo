@@ -129,6 +129,41 @@ def _iban(idx):
     return "AE07" + f"{1000000000000000000 + idx:019d}"
 
 
+# Fake dates of birth (year, month, day); "today" makes a birthday-today demo.
+# EMP006's birthday is today so the celebrations page always has content.
+DEMO_DOBS = {
+    "HRADMIN": (1985, 7, 14), "MGR001": (1988, 2, 3),
+    "EMP001": (1992, 11, 25), "EMP002": (1990, 5, 9),
+    "EMP003": (1987, 9, 17), "MGR002": (1983, 12, 1),
+    "MGR003": (1986, 4, 22), "EMP004": (1991, 8, 30),
+    "EMP005": (1994, 6, 5), "EMP006": "today",
+    "EMP007": (1989, 1, 19), "EMP008": (1993, 10, 8),
+    "EMP009": (1990, 3, 27), "EMP010": (1997, 7, 11),
+    "EMP011": (1992, 2, 14), "EMP012": (1988, 9, 3),
+    "EMP013": (1991, 12, 29), "EMP014": (1993, 5, 16),
+    "EMP015": (1990, 11, 2), "EMP016": (1996, 8, 21),
+}
+
+
+def _demo_dob(uid, today):
+    spec = DEMO_DOBS.get(uid)
+    if spec == "today":
+        return today
+    if spec:
+        return date(*spec)
+    return None
+
+
+def _demo_joining(uid, today, joined_days):
+    # EMP007's joining anniversary is today in the demo (celebrations page).
+    if uid == "EMP007":
+        try:
+            return date(today.year - 3, today.month, today.day)
+        except ValueError:  # Feb 29 edge
+            return date(today.year - 3, today.month, 28)
+    return today - timedelta(days=joined_days)
+
+
 def ensure_demo_users():
     """Create the 20 demo users (if missing) and seed all module demo data.
 
@@ -142,10 +177,13 @@ def ensure_demo_users():
                                     _seed_onboarding, _seed_grievances,
                                     _seed_evaluations,
                                     _seed_v3_extras, _seed_v31_extras,
-                                    _seed_v32_extras)
+                                    _seed_v32_extras, _seed_v33_extras,
+                                    _seed_v34_extras)
     import config as app_config
 
-    today = date.today()
+    # v3.3: GST "today" so birthday/anniversary demos match the app's
+    # Asia/Dubai calendar (the VM itself runs on UTC).
+    today = (datetime.utcnow() + timedelta(hours=4)).date()
     created = 0
     for i, spec in enumerate(DEMO_USERS):
         uid = spec["uid"]
@@ -154,8 +192,9 @@ def ensure_demo_users():
                 id=uid, name=spec["name"], department=spec["department"],
                 designation=spec["designation"], role=spec["role"],
                 reporting_manager=spec["mgr"],
-                joining_date=today - timedelta(days=spec["joined"]),
+                joining_date=_demo_joining(uid, today, spec["joined"]),
                 employment_status=spec["status"],
+                date_of_birth=_demo_dob(uid, today),
                 nationality=spec["nationality"],
                 visa_expiry_date=today + timedelta(days=spec["visa"]),
                 passport_expiry_date=today + timedelta(days=spec["passport"]),
@@ -194,6 +233,16 @@ def ensure_demo_users():
     _seed_v3_extras(DEMO_USERS, _iban)
     _seed_v31_extras()
     _seed_v32_extras()
+    _seed_v33_extras()
+    _seed_v34_extras()  # v3.4: HR flags + demo approval chains
+
+    # Backfill DOBs for users that pre-date the v3.3 column.
+    for spec in DEMO_USERS:
+        u = db.session.get(User, spec["uid"])
+        if u is not None and u.date_of_birth is None:
+            u.date_of_birth = _demo_dob(spec["uid"], today)
+        if u is not None and spec["uid"] == "EMP007":
+            u.joining_date = _demo_joining("EMP007", today, spec["joined"])
 
     db.session.commit()
     return created

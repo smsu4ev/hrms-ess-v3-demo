@@ -60,6 +60,10 @@ def create_app():
     app.register_blueprint(roster.roster_bp)
     from app import settlement  # noqa: E402  (v3.2 full & final settlement)
     app.register_blueprint(settlement.settlement_bp)
+    from app import engagement  # noqa: E402  (v3.3 employee experience)
+    app.register_blueprint(engagement.engagement_bp)
+    from app import approvals  # noqa: E402  (v3.4 approval matrix)
+    app.register_blueprint(approvals.approvals_bp)
 
     @app.before_request
     def enforce_password_change():
@@ -75,7 +79,15 @@ def create_app():
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        # v3.3: the selfie check-in page needs camera + geolocation; everything
+        # else keeps them locked down. (Browsers also require HTTPS or
+        # localhost for these APIs — see README-V3.3.)
+        if request.path == "/attendance/punch":
+            response.headers["Permissions-Policy"] = \
+                "camera=(self), geolocation=(self), microphone=()"
+        else:
+            response.headers["Permissions-Policy"] = \
+                "camera=(), microphone=(), geolocation=()"
         # Conservative CSP: same-origin only, no inline scripts needed by templates.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; style-src 'self' 'unsafe-inline'; "
@@ -90,16 +102,22 @@ def create_app():
     @app.context_processor
     def inject_globals():
         can_view = False
+        unread = 0
         try:
             if current_user.is_authenticated:
                 from app.files import salary_visible
                 can_view = salary_visible(current_user)
+                # v3.3: notification-centre bell badge.
+                from app.models import Notification
+                unread = Notification.query.filter_by(
+                    user_id=current_user.id, is_read=False).count()
         except Exception:
             can_view = False
         return {
             "company_name": app_config.COMPANY_NAME,
             "trade_name": app_config.TRADE_NAME,
             "can_view_salary": can_view,
+            "unread_count": unread,
         }
 
     with app.app_context():
@@ -130,9 +148,20 @@ def create_app():
                 ("emirates_id_no", "VARCHAR(40)"),
                 ("separation_date", "DATE"),      # v3.1 separation register
                 ("separation_type", "VARCHAR(30)"),
+                ("date_of_birth", "DATE"),       # v3.3 birthday celebrations
+                ("is_hr_staff", "BOOLEAN"),      # v3.4 approval matrix
+                ("is_hr_manager", "BOOLEAN"),
+                ("pending_status", "VARCHAR(20)"),
             ]:
                 add_column("users", col, ddl)
             add_column("generated_letters", "has_salary_data", "BOOLEAN")
+            # v3.2.1: settlement due-date/receipt/ticket fields + outdoor flag
+            add_column("final_settlements", "unpaid_days_used", "FLOAT")
+            add_column("final_settlements", "cancellation_doc_path",
+                       "VARCHAR(120)")
+            add_column("final_settlements", "ticket_option", "VARCHAR(20)")
+            add_column("final_settlements", "ticket_amount", "FLOAT")
+            add_column("shift_patterns", "is_outdoor", "BOOLEAN")
             # New table for idempotent loan recovery (checkfirst = no-op if present).
             from app.models import PayrollLoanRecovery
             PayrollLoanRecovery.__table__.create(db.engine, checkfirst=True)
@@ -140,13 +169,31 @@ def create_app():
         except Exception:
             app.logger.exception("Column migration failed")
             db.session.rollback()
+        # v3.4: default approval matrices (idempotent; existing chains are
+        # never overwritten, so HR Admin customisations survive upgrades).
+        try:
+            from app.approvals import ensure_default_matrices
+            ensure_default_matrices()
+        except Exception:
+            app.logger.exception("Approval matrix defaults failed")
         # Private upload folders (never served directly; files go through
-        # authenticated routes only).
+        # authenticated routes only). v3.3 adds punches / training / signatures.
         try:
             from app.files import upload_root
-            upload_root()
+            import os as _os
+            root = upload_root()
+            for sub in ("punches", "training", "signatures",
+                        "settlement_receipts"):
+                _os.makedirs(_os.path.join(root, sub), exist_ok=True)
         except Exception:
             app.logger.exception("Upload folder setup failed")
+        # v3.3: run the 45-day punch-photo retention once at startup
+        # (also runs lazily on the punch page at most once a day).
+        try:
+            from app.engagement import purge_punch_photos, PUNCH_PHOTO_DAYS
+            purge_punch_photos(PUNCH_PHOTO_DAYS)
+        except Exception:
+            app.logger.exception("Punch photo purge failed")
         # Free-sample mode only: auto-create fake demo users on startup
         # (hosts like Render free have no shell to run seed_demo.py).
         if os.environ.get("ESS_SEED_DEMO") == "1":

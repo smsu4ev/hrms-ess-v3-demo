@@ -58,6 +58,22 @@ def admin_post_only(fn):
     return wrapper
 
 
+def employee_creator_required(fn):
+    """Employee creation (v3.4): admins, HR managers and HR staff may open
+    the form and submit it. Records created by plain HR staff go through
+    the approval matrix before activation; the HR Manager (or an admin)
+    approves them on the review page."""
+    from functools import wraps
+
+    @wraps(fn)
+    def wrapper(*a, **kw):
+        if not (current_user.is_admin or current_user.is_hr_staff
+                or current_user.is_hr_manager):
+            abort(403)
+        return fn(*a, **kw)
+    return wrapper
+
+
 EMPLOYEE_FIELDS = ["name", "department", "designation", "reporting_manager",
                    "joining_date", "employment_status", "nationality",
                    "visa_expiry_date", "passport_expiry_date",
@@ -65,6 +81,7 @@ EMPLOYEE_FIELDS = ["name", "department", "designation", "reporting_manager",
                    "email", "mobile", "phone", "iban", "bank_name",
                    "visa_company_id", "exit_date",
                    "separation_date", "separation_type",  # v3.1
+                   "date_of_birth",  # v3.3
                    "basic_salary", "monthly_salary"]
 
 EMPLOYMENT_STATUSES = ["active", "probation", "resigned", "terminated", "retired"]
@@ -114,17 +131,19 @@ def employees():
         query = query.filter_by(department=dept)
     if status:
         query = query.filter_by(employment_status=status)
+    statuses = list(EMPLOYMENT_STATUSES)
+    if "pending_approval" not in statuses:
+        statuses.append("pending_approval")
     rows = query.order_by(User.name).limit(300).all()
     departments = sorted({u.department for u in User.query.all() if u.department})
     return render_template("hr_employees.html", rows=rows, q=q, dept=dept,
                            status=status, departments=departments,
-                           statuses=EMPLOYMENT_STATUSES)
+                           statuses=statuses)
 
 
 @hrms_bp.route("/employees/new", methods=["GET", "POST"])
 @login_required
-@hr_required
-@admin_post_only
+@employee_creator_required
 def employee_new():
     error = None
     companies = Company.query.filter_by(is_active=True).order_by(Company.code).all()
@@ -136,12 +155,31 @@ def employee_new():
         elif User.query.get(uid):
             error = f"Employee ID {uid} already exists."
         else:
+            # v3.4: approval matrix for employee creation. HR staff (not the
+            # HR Manager) create a pending, non-loginable record; the HR
+            # Manager reviews and activates it. Salary fields and admin roles
+            # can never be set through the HR-staff path.
+            creator = current_user
+            direct = bool(creator.is_admin or creator.is_hr_manager)
+            intended_status = request.form.get("employment_status") or "probation"
+            if intended_status not in EMPLOYMENT_STATUSES:
+                intended_status = "probation"
+            if direct:
+                status, active, pending_status = intended_status, None, None
+                basic = float(request.form.get("basic_salary") or 0)
+                monthly = float(request.form.get("monthly_salary") or 0)
+            else:
+                status, active = "pending_approval", False
+                pending_status = intended_status
+                basic, monthly = 0.0, 0.0
             user = User(id=uid, name=name,
                         department=(request.form.get("department") or "").strip() or None,
                         designation=(request.form.get("designation") or "").strip() or None,
                         reporting_manager=(request.form.get("reporting_manager") or "").strip() or None,
                         joining_date=parse_date(request.form.get("joining_date")),
-                        employment_status=request.form.get("employment_status") or "active",
+                        employment_status=status,
+                        is_active=True if active is None else active,
+                        pending_status=pending_status,
                         nationality=(request.form.get("nationality") or "").strip() or None,
                         visa_expiry_date=parse_date(request.form.get("visa_expiry_date")),
                         passport_expiry_date=parse_date(request.form.get("passport_expiry_date")),
@@ -155,8 +193,9 @@ def employee_new():
                         bank_name=(request.form.get("bank_name") or "").strip() or None,
                         visa_company_id=(int(request.form.get("visa_company_id") or 0) or None),
                         exit_date=parse_date(request.form.get("exit_date")),
-                        basic_salary=float(request.form.get("basic_salary") or 0),
-                        monthly_salary=float(request.form.get("monthly_salary") or 0))
+                        date_of_birth=parse_date(request.form.get("date_of_birth")),
+                        basic_salary=basic,
+                        monthly_salary=monthly)
             # Random temporary password: secrets-based (never a guessable
             # time-derived default). The "A1a!" suffix guarantees upper,
             # lower, digit and symbol characters.
@@ -171,6 +210,14 @@ def employee_new():
                        entity="employee", entity_id=uid, field_name=f,
                        old_value="", new_value=getattr(user, f))
             db.session.commit()
+            if not direct:
+                # v3.4: route through the approval matrix; the HR Manager
+                # activates the record after review.
+                from app.approvals import start_instance
+                start_instance("employee_creation", uid, uid, creator.id)
+                flash(f"Employee {uid} created and sent to the HR Manager "
+                      f"for approval.", "success")
+                return redirect(url_for("hrms.employee_review", uid=uid))
             flash(f"Employee {uid} created. Temporary password: {temp_pw} "
                   "- share it securely; the employee must change it on login.", "success")
             return redirect(url_for("hrms.employee_detail", uid=uid))
@@ -178,7 +225,9 @@ def employee_new():
                                  User.is_active.is_(True)).order_by(User.name).all()
     return render_template("hr_employee_form.html", user=None, error=error,
                            statuses=EMPLOYMENT_STATUSES, managers=managers,
-                           companies=companies)
+                           companies=companies,
+                           creator_is_hr_staff=not (
+                               current_user.is_admin or current_user.is_hr_manager))
 
 
 @hrms_bp.route("/employees/<uid>")
@@ -200,6 +249,72 @@ def employee_detail(uid):
     manager = User.query.get(user.reporting_manager) if user.reporting_manager else None
     return render_template("hr_employee_detail.html", user=user, balances=balances,
                            leaves=leaves, present_days=present, logs=logs, manager=manager)
+
+
+@hrms_bp.route("/employees/<uid>/review", methods=["GET", "POST"])
+@login_required
+def employee_review(uid):
+    """HR-approval review for an employee created by HR staff (v3.4).
+
+    Read-only field display plus Approve/Reject for the current step's
+    resolvers. Approving activates the record with the intended status.
+    """
+    from app.approvals import (get_instance, can_act, act, current_resolvers,
+                               step_badge)
+    user = User.query.get_or_404(uid)
+    instance = get_instance("employee_creation", uid)
+    if instance is None:
+        flash("This employee record was not created through the approval "
+              "flow.", "error")
+        return redirect(url_for("hrms.employee_detail", uid=uid))
+    resolvers = current_resolvers(instance) if instance.status == "pending" else []
+    may_view = (current_user.is_admin or current_user.is_hr_manager
+                or current_user.id in resolvers
+                or current_user.id == instance.requester_id)
+    if not may_view:
+        abort(403)
+    actions = instance.actions.all()  # already ordered by id (v3.4 model)
+    approver_names = {u.id: u.name for u in User.query.filter(
+        User.id.in_([a.actor_id for a in actions if a.actor_id])).all()}
+    if request.method == "POST":
+        if instance.status != "pending":
+            flash("This request has already been decided.", "error")
+            return redirect(url_for("hrms.employee_review", uid=uid))
+        action = request.form.get("action")
+        comment = (request.form.get("comment") or "").strip()[:500]
+        if action not in ("approve", "reject"):
+            abort(400)
+        try:
+            outcome = act(instance, current_user, action == "approve", comment)
+        except PermissionError:
+            abort(403)
+        if outcome == "final_approved":
+            user.employment_status = user.pending_status or "probation"
+            user.pending_status = None
+            user.is_active = user.employment_status in ("active", "probation")
+            db.session.commit()
+            record("employee_approved",
+                   f"Employee {uid} ({user.name}) approved and activated "
+                   f"as {user.employment_status}",
+                   entity="employee", entity_id=uid,
+                   field_name="employment_status",
+                   old_value="pending_approval",
+                   new_value=user.employment_status)
+            db.session.commit()
+            flash(f"Employee {uid} approved and activated.", "success")
+        elif outcome == "rejected":
+            flash("Employee creation rejected. The record stays inactive.",
+                  "success")
+        else:
+            flash("Approved at this step; forwarded to the next approver.",
+                  "success")
+        return redirect(url_for("hrms.employee_review", uid=uid))
+    return render_template("hr_employee_review.html", user=user,
+                           instance=instance, actions=actions,
+                           approver_names=approver_names,
+                           can_act=can_act(instance, current_user),
+                           badge=step_badge(instance),
+                           resolvers=resolvers)
 
 
 @hrms_bp.route("/employees/<uid>/edit", methods=["GET", "POST"])
@@ -232,6 +347,7 @@ def employee_edit(uid):
         user.bank_name = (request.form.get("bank_name") or "").strip() or None
         user.visa_company_id = int(request.form.get("visa_company_id") or 0) or None
         user.exit_date = parse_date(request.form.get("exit_date"))
+        user.date_of_birth = parse_date(request.form.get("date_of_birth"))
         # v3.1: separation register linkage (shown in the form when the
         # employee is resigned/terminated)
         user.separation_date = parse_date(request.form.get("separation_date"))

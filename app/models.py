@@ -1,5 +1,5 @@
 """Database models for the HRMS + ESS portal (v2)."""
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -30,8 +30,16 @@ class User(UserMixin, db.Model):
     visa_company_id = db.Column(db.Integer, db.ForeignKey("companies.id"))
     photo_path = db.Column(db.String(120))
     can_view_salary = db.Column(db.Boolean, default=False, nullable=False)
+    # v3.4: HR team flags for the configurable approval matrix.
+    is_hr_staff = db.Column(db.Boolean, default=False, nullable=False)
+    is_hr_manager = db.Column(db.Boolean, default=False, nullable=False)
+    # v3.4: employee-creation approvals. A record created by HR staff waits
+    # as employment_status="pending_approval" (is_active=False); the HR
+    # Manager's approval activates it with the intended status below.
+    pending_status = db.Column(db.String(20))
     phone = db.Column(db.String(30))
     passport_no = db.Column(db.String(40))
+    date_of_birth = db.Column(db.Date)  # v3.3: birthday celebrations
     exit_date = db.Column(db.Date)
     separation_date = db.Column(db.Date)      # v3.1: separation register
     separation_type = db.Column(db.String(30))
@@ -659,6 +667,7 @@ class ShiftPattern(db.Model):
     break_minutes = db.Column(db.Integer, default=60, nullable=False)
     grace_minutes = db.Column(db.Integer, default=10, nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    is_outdoor = db.Column(db.Boolean, default=False, nullable=False)  # v3.2.1: outdoor/site work -> midday-break warning
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     @property
@@ -718,6 +727,14 @@ class FinalSettlement(db.Model):
     total_payable = db.Column(db.Float, default=0.0, nullable=False)
     total_recoverable = db.Column(db.Float, default=0.0, nullable=False)
     net = db.Column(db.Float, default=0.0, nullable=False)
+    # v3.2.1: unpaid absence days excluded from gratuity service (Art. 51),
+    # signed MOHRE cancellation / EOS receipt required before Mark Paid,
+    # structured repatriation-ticket option.
+    unpaid_days_used = db.Column(db.Float, default=0.0, nullable=False)
+    cancellation_doc_path = db.Column(db.String(120))
+    ticket_option = db.Column(db.String(20), default="none", nullable=False)
+    # none | cash | booked | na
+    ticket_amount = db.Column(db.Float, default=0.0, nullable=False)
     created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
     approved_by = db.Column(db.String(20), db.ForeignKey("users.id"))
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -735,6 +752,19 @@ class FinalSettlement(db.Model):
         except Exception:
             return []
 
+    @property
+    def payment_due_date(self):
+        """Art. 53: all entitlements must be paid within 14 days of contract end."""
+        if not self.last_working_day:
+            return None
+        return self.last_working_day + timedelta(days=14)
+
+    @property
+    def is_overdue(self):
+        return (self.status in ("calculated", "approved")
+                and self.payment_due_date is not None
+                and date.today() > self.payment_due_date)
+
 
 class SettlementLine(db.Model):
     """Manual adjustment lines entered while a settlement is a draft (v3.2)."""
@@ -749,3 +779,390 @@ class SettlementLine(db.Model):
     note = db.Column(db.String(300))
     created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ===================== HRMS+ESS V3.3 models =====================
+
+class AppSetting(db.Model):
+    """Simple key/value store for housekeeping state (v3.3).
+
+    Keys used: "punch_purge_last_run" (YYYY-MM-DD),
+    "celebrations_last_run" (YYYY-MM-DD).
+    """
+    __tablename__ = "app_settings"
+    key = db.Column(db.String(80), primary_key=True)
+    value = db.Column(db.String(200))
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow,
+                           onupdate=datetime.utcnow, nullable=False)
+
+    @staticmethod
+    def get(key, default=None):
+        row = AppSetting.query.get(key)
+        return row.value if row and row.value is not None else default
+
+    @staticmethod
+    def set(key, value):
+        row = AppSetting.query.get(key)
+        if row is None:
+            row = AppSetting(key=key, value=value)
+            db.session.add(row)
+        else:
+            row.value = value
+
+
+class WorkLocation(db.Model):
+    """Named geo-fenced work sites for mobile check-in/out (v3.3)."""
+    __tablename__ = "work_locations"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    radius_m = db.Column(db.Integer, default=200, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PunchRecord(db.Model):
+    """Geo + selfie check-in/out record (v3.3).
+
+    punched_at is UTC; local_date is the Asia/Dubai calendar date.
+    Photos auto-delete after 45 days; the record is kept.
+    """
+    __tablename__ = "punch_records"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"),
+                        nullable=False, index=True)
+    punch_type = db.Column(db.String(10), nullable=False)  # in|out
+    punched_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    local_date = db.Column(db.Date, nullable=False, index=True)
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    accuracy_m = db.Column(db.Float)
+    location_id = db.Column(db.Integer, db.ForeignKey("work_locations.id"))
+    distance_m = db.Column(db.Float)
+    photo_path = db.Column(db.String(120))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    location = db.relationship("WorkLocation")
+
+
+class Notice(db.Model):
+    """Company notices pushed to the notification centre (v3.3)."""
+    __tablename__ = "notices"
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    audience = db.Column(db.String(80), default="all", nullable=False)
+    # "all" or a department name
+    requires_ack = db.Column(db.Boolean, default=False, nullable=False)
+    # mandatory read: employees must acknowledge this notice
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = db.Column(db.DateTime)
+
+
+class NoticeAck(db.Model):
+    """Mandatory-read acknowledgement of a notice (v3.3)."""
+    __tablename__ = "notice_acks"
+    id = db.Column(db.Integer, primary_key=True)
+    notice_id = db.Column(db.Integer, db.ForeignKey("notices.id"),
+                          nullable=False, index=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"),
+                        nullable=False, index=True)
+    acknowledged_at = db.Column(db.DateTime, default=datetime.utcnow,
+                                nullable=False)
+    __table_args__ = (db.UniqueConstraint("notice_id", "user_id"),)
+
+
+class Notification(db.Model):
+    """Employee notification centre entries (v3.3)."""
+    __tablename__ = "notifications"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"),
+                        nullable=False, index=True)
+    kind = db.Column(db.String(30), default="system", nullable=False)
+    # notice|birthday|anniversary|wish|training|jd|system
+    title = db.Column(db.String(200), nullable=False)
+    body = db.Column(db.Text)
+    link = db.Column(db.String(200))
+    ref_id = db.Column(db.Integer)
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False,
+                           index=True)
+
+
+class CelebrationPost(db.Model):
+    """One birthday / work-anniversary post per employee per day (v3.3)."""
+    __tablename__ = "celebration_posts"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"),
+                        nullable=False, index=True)
+    kind = db.Column(db.String(20), nullable=False)  # birthday|anniversary
+    post_date = db.Column(db.Date, nullable=False, index=True)
+    years = db.Column(db.Integer)  # anniversary years of service
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    __table_args__ = (db.UniqueConstraint("user_id", "kind", "post_date"),)
+
+
+class CelebrationWish(db.Model):
+    """One row per (post, well-wisher): a message and/or a reaction (v3.3).
+
+    Reactions use the fixed REACTIONS set on the model; re-reacting by the
+    same user replaces their row (one reaction per user per post).
+    """
+    __tablename__ = "celebration_wishes"
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("celebration_posts.id"),
+                        nullable=False, index=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"),
+                        nullable=False, index=True)
+    message = db.Column(db.String(200))
+    reaction = db.Column(db.String(16))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    __table_args__ = (db.UniqueConstraint("post_id", "user_id"),)
+
+
+REACTIONS = ["👍", "❤️", "🎉", "👏", "🎂", "💐"]
+
+
+class TrainingCourse(db.Model):
+    """LMS-lite course with optional material and graded quiz (v3.3)."""
+    __tablename__ = "training_courses"
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(160), nullable=False)
+    category = db.Column(db.String(30), default="Basic", nullable=False)
+    # Induction|Orientation|Basic|Technical|Safety|Other
+    description = db.Column(db.Text)
+    material_kind = db.Column(db.String(10), default="none", nullable=False)
+    # none|file|link
+    material_path = db.Column(db.String(120))  # private storage filename
+    material_url = db.Column(db.String(400))
+    pass_percent = db.Column(db.Integer, default=70, nullable=False)
+    issue_cert_name = db.Column(db.String(120))  # creates a Certification on pass
+    cert_valid_months = db.Column(db.Integer)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class QuizQuestion(db.Model):
+    """One multiple-choice question of a course quiz (v3.3)."""
+    __tablename__ = "quiz_questions"
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey("training_courses.id"),
+                          nullable=False, index=True)
+    question = db.Column(db.Text, nullable=False)
+    options_json = db.Column(db.Text, nullable=False)  # JSON list of 4 strings
+    correct_index = db.Column(db.Integer, default=0, nullable=False)
+    sort = db.Column(db.Integer, default=0, nullable=False)
+
+    @property
+    def options(self):
+        import json
+        try:
+            return json.loads(self.options_json or "[]")
+        except Exception:
+            return []
+
+
+class TrainingAssignment(db.Model):
+    """A course assigned to one employee (v3.3)."""
+    __tablename__ = "training_assignments"
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey("training_courses.id"),
+                          nullable=False, index=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"),
+                        nullable=False, index=True)
+    due_date = db.Column(db.Date)
+    assigned_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    __table_args__ = (db.UniqueConstraint("course_id", "user_id"),)
+
+
+class TrainingAttempt(db.Model):
+    """One graded quiz attempt (v3.3). Best score is derived from attempts."""
+    __tablename__ = "training_attempts"
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey("training_courses.id"),
+                          nullable=False, index=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"),
+                        nullable=False, index=True)
+    score_percent = db.Column(db.Float, default=0.0, nullable=False)
+    passed = db.Column(db.Boolean, default=False, nullable=False)
+    answers_json = db.Column(db.Text, default="[]", nullable=False)
+    completed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class JobDescription(db.Model):
+    """Job description with versioning (v3.3, section 5).
+
+    Acknowledgements are per-version: editing the body bumps version and
+    older acknowledgements show as needing re-acknowledgement.
+    """
+    __tablename__ = "job_descriptions"
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(120), nullable=False)  # position
+    department = db.Column(db.String(80))
+    reports_to = db.Column(db.String(120))
+    body = db.Column(db.Text, nullable=False)
+    material_path = db.Column(db.String(120))  # optional private PDF upload
+    version = db.Column(db.Integer, default=1, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow,
+                           onupdate=datetime.utcnow, nullable=False)
+
+
+class JDAcknowledgement(db.Model):
+    """Employee acknowledgement of a job description (v3.3, section 5)."""
+    __tablename__ = "jd_acknowledgements"
+    id = db.Column(db.Integer, primary_key=True)
+    jd_id = db.Column(db.Integer, db.ForeignKey("job_descriptions.id"),
+                      nullable=False, index=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"),
+                        nullable=False, index=True)
+    status = db.Column(db.String(20), default="assigned", nullable=False)
+    # assigned | viewed | acknowledged
+    jd_version = db.Column(db.Integer, default=1, nullable=False)
+    # version acknowledged (or assigned at); stale if < current jd.version
+    assigned_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    assigned_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    viewed_at = db.Column(db.DateTime)
+    acknowledged_at = db.Column(db.DateTime)
+    signature_path = db.Column(db.String(120))
+    signer_ip = db.Column(db.String(45))
+    typed_name = db.Column(db.String(120))
+    __table_args__ = (db.UniqueConstraint("jd_id", "user_id"),)
+
+    @property
+    def needs_reack(self):
+        jd = JobDescription.query.get(self.jd_id)
+        return bool(jd and self.jd_version < jd.version)
+
+
+# ===================== HRMS+ESS V3.4 models =====================
+# Configurable approval matrix: multi-step approval chains per process
+# (employee creation, leave, attendance regularisation), customisable by
+# the HR Admin.
+
+APPROVAL_PROCESSES = [
+    ("employee_creation", "Employee Creation"),
+    ("leave", "Leave"),
+    ("regularisation", "Attendance Regularisation"),
+]
+
+APPROVER_TYPES = [
+    ("reporting_manager", "Reporting Manager"),
+    ("skip_level_manager", "Skip-Level Manager"),
+    ("hr_staff", "HR Staff"),
+    ("hr_manager", "HR Manager"),
+    ("admin", "Administrator"),
+    ("specific_user", "Specific User"),
+]
+
+
+class ApprovalMatrix(db.Model):
+    """One ordered step chain per process. Admin-customisable (v3.4)."""
+    __tablename__ = "approval_matrices"
+    id = db.Column(db.Integer, primary_key=True)
+    process_key = db.Column(db.String(40), unique=True, nullable=False,
+                            index=True)  # employee_creation|leave|regularisation
+    name = db.Column(db.String(80), nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    steps = db.relationship("ApprovalStep",
+                            backref="matrix", lazy="dynamic",
+                            order_by="ApprovalStep.step_no",
+                            cascade="all, delete-orphan")
+
+
+class ApprovalStep(db.Model):
+    """One step in a matrix chain (v3.4)."""
+    __tablename__ = "approval_steps"
+    id = db.Column(db.Integer, primary_key=True)
+    matrix_id = db.Column(db.Integer, db.ForeignKey("approval_matrices.id"),
+                          nullable=False, index=True)
+    step_no = db.Column(db.Integer, nullable=False)  # 1-based order
+    approver_type = db.Column(db.String(30), nullable=False)
+    # reporting_manager|skip_level_manager|hr_staff|hr_manager|admin|specific_user
+    approver_user_id = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    __table_args__ = (db.UniqueConstraint("matrix_id", "step_no"),)
+
+
+class ApprovalInstance(db.Model):
+    """One in-flight approval for a concrete request (v3.4).
+
+    steps_json snapshots the matrix chain at start time, so editing the
+    matrix later never mutates in-flight instances.
+    """
+    __tablename__ = "approval_instances"
+    id = db.Column(db.Integer, primary_key=True)
+    process_key = db.Column(db.String(40), nullable=False, index=True)
+    ref_id = db.Column(db.String(40), nullable=False, index=True)
+    # leave/regularisation request id | new employee user id
+    subject_user_id = db.Column(db.String(20), db.ForeignKey("users.id"),
+                                nullable=False, index=True)
+    # the employee the request is about
+    requester_id = db.Column(db.String(20), db.ForeignKey("users.id"))
+    # who submitted / created the request
+    steps_json = db.Column(db.Text, nullable=False, default="[]")
+    # [{"step_no": n, "approver_type": ..., "approver_user_id": ...}]
+    current_step = db.Column(db.Integer, default=1, nullable=False)
+    status = db.Column(db.String(20), default="pending", nullable=False)
+    # pending | approved | rejected
+    reject_reason = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    decided_at = db.Column(db.DateTime)
+    __table_args__ = (db.UniqueConstraint("process_key", "ref_id"),)
+
+    @property
+    def steps(self):
+        import json
+        try:
+            return json.loads(self.steps_json or "[]")
+        except Exception:
+            return []
+
+    @property
+    def total_steps(self):
+        return len(self.steps)
+
+    @property
+    def current_step_def(self):
+        for s in self.steps:
+            if s.get("step_no") == self.current_step:
+                return s
+        return None
+
+    @property
+    def exhausted(self):
+        return self.current_step > self.total_steps
+
+    @property
+    def process_label(self):
+        return dict(APPROVAL_PROCESSES).get(self.process_key, self.process_key)
+
+
+class ApprovalAction(db.Model):
+    """One approve/reject/auto_skip recorded on an instance (v3.4)."""
+    __tablename__ = "approval_actions"
+    id = db.Column(db.Integer, primary_key=True)
+    instance_id = db.Column(db.Integer,
+                            db.ForeignKey("approval_instances.id"),
+                            nullable=False, index=True)
+    step_no = db.Column(db.Integer, nullable=False)
+    actor_id = db.Column(db.String(20), db.ForeignKey("users.id"))
+    # None for auto_skip
+    action = db.Column(db.String(20), nullable=False)  # approve|reject|auto_skip
+    comment = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False,
+                           index=True)
+
+    instance = db.relationship("ApprovalInstance",
+                               backref=db.backref("actions", lazy="dynamic",
+                                                  order_by="ApprovalAction.id",
+                                                  cascade="all, delete-orphan"))

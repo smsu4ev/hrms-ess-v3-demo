@@ -109,7 +109,7 @@ with app.app_context():
     gen_id = ShiftPattern.query.filter_by(code="GEN").first().id
 # shift with assignments cannot be deleted
 with app.app_context():
-    db.session.add(RosterAssignment(user_id="T32-E1", date=monday,
+    db.session.add(RosterAssignment(user_id="T32-E3", date=monday,
                                    shift_id=night_id, created_by="T32-ADM"))
     db.session.commit()
 t = get_token("/hrms/shifts")
@@ -171,10 +171,13 @@ with app.app_context():
     n3 = RosterAssignment.query.filter_by(user_id="T32-E1").count()
 check("rerun with overwrite keeps 6 rows (replaced)", n3 == 6, extra=f"got {n3}")
 # fresh NIGHT assignment for grid/variance checks (after the overwrite runs)
+# (reuses the delete-block fixture row for T32-E3/Monday if present)
 with app.app_context():
-    db.session.add(RosterAssignment(user_id="T32-E3", date=monday,
-                                   shift_id=gen_id, created_by="T32-ADM"))
     a3 = RosterAssignment.query.filter_by(user_id="T32-E3", date=monday).first()
+    if a3 is None:
+        a3 = RosterAssignment(user_id="T32-E3", date=monday,
+                              shift_id=gen_id, created_by="T32-ADM")
+        db.session.add(a3)
     a3.shift_id = night_id
     db.session.commit()
 
@@ -229,14 +232,17 @@ login("T32-ADM", "pw-T32-ADM")
 
 # ================= variance =================
 with app.app_context():
-    # T32-E1 rostered this Monday; mark absent -> bucket (a)
-    db.session.add(AttendanceRecord(user_id="T32-E1", date=monday, status="absent"))
+    # T32-E3 rostered this Monday (NIGHT); mark absent -> bucket (a).
+    # NOTE: uses T32-E3, not T32-E1, so the settlement fixture for T32-E1
+    # below stays free of unexcused absences (Art. 51 unpaid-day exclusion
+    # is exercised in test_v321 instead).
+    db.session.add(AttendanceRecord(user_id="T32-E3", date=monday, status="absent"))
     # T32-S1 present with no roster assignment -> bucket (b)
     db.session.add(AttendanceRecord(user_id="T32-S1", date=monday, status="present"))
     db.session.commit()
 r = client.get(f"/hrms/roster/variance?date={monday.isoformat()}")
 check("variance 200", r.status_code == 200)
-check("rostered-but-absent employee listed", b"T32-E1" in r.data)
+check("rostered-but-absent employee listed", b"T32-E3" in r.data)
 check("present-but-unrostered employee listed", b"T32-S1" in r.data)
 check("night-shift rostered employee listed", b"NIGHT" in r.data)
 
@@ -405,6 +411,23 @@ with app.app_context():
     st = FinalSettlement.query.get(sid)
     check("second admin approves", st.status == "approved"
           and st.approved_by == "T32-ADM2")
+# v3.2.1: Mark Paid is blocked until a signed MOHRE cancellation / EOS
+# receipt is uploaded (Art. 53 payment gate).
+r = client.post(f"/hrms/settlements/{sid}/mark-paid",
+                data={"csrf_token": get_token(f"/hrms/settlements/{sid}")},
+                follow_redirects=False)
+with app.app_context():
+    st = FinalSettlement.query.get(sid)
+    check("mark paid blocked without receipt", st.status == "approved")
+t = get_token(f"/hrms/settlements/{sid}")
+r = client.post(f"/hrms/settlements/{sid}/receipt",
+                data={"csrf_token": t,
+                      "receipt": (io.BytesIO(b"%PDF-1.4 test receipt"),
+                                  "receipt.pdf")},
+                content_type="multipart/form-data", follow_redirects=False)
+with app.app_context():
+    st = FinalSettlement.query.get(sid)
+    check("receipt uploaded", bool(st.cancellation_doc_path))
 r = client.post(f"/hrms/settlements/{sid}/mark-paid",
                 data={"csrf_token": get_token(f"/hrms/settlements/{sid}")},
                 follow_redirects=False)

@@ -498,3 +498,198 @@ def _seed_v32_extras():
             status="draft", notice_days=0, notice_direction="none",
             created_by="HRADMIN"))
     db.session.flush()
+
+
+# ===================== HRMS+ESS V3.3 seed extras =====================
+
+def _demo_signature_png():
+    """Tiny synthetic signature image (demo only)."""
+    import io as _io
+    from PIL import Image as _Image, ImageDraw as _Draw
+    img = _Image.new("RGB", (400, 160), "white")
+    d = _Draw.Draw(img)
+    d.line([(40, 105), (110, 60), (170, 108), (235, 66), (300, 96), (350, 80)],
+           fill="black", width=3)
+    d.line([(50, 125), (330, 130)], fill="black", width=2)
+    buf = _io.BytesIO()
+    img.save(buf, "JPEG", quality=80)
+    return buf.getvalue()
+
+
+_WELDER_JD = """JOB PURPOSE
+Perform MIG/TIG welding on mild steel and stainless steel components for retail fixture manufacturing, meeting drawing tolerances and quality standards.
+
+EDUCATION / QUALIFICATION
+- ITI / diploma in welding technology or equivalent trade certificate.
+- Minimum 2 years of experience in structural or sheet-metal welding.
+
+ACCOUNTABILITIES
+1. Read and interpret fabrication drawings and welding symbols.
+2. Set up welding machines, jigs and fixtures for production jobs.
+3. Perform MIG/TIG welding on mild steel and SS as per WPS.
+4. Grind and finish welds to the required surface quality.
+5. Conduct first-piece inspection and report deviations to the supervisor.
+6. Follow all HSE rules: PPE, hot-work permits, fume extraction.
+7. Maintain daily production records and consumable usage.
+
+JOB NATURE
+Full-time, factory-based (Umm Al Quwain). Shift work as rostered.
+"""
+
+_HR_EXEC_JD = """JOB PURPOSE
+Support the HR Manager in recruitment, onboarding, attendance administration and employee records for factory and office staff.
+
+EDUCATION / QUALIFICATION
+- Bachelor's degree in Human Resources, Business Administration or related field.
+- 2+ years of HR generalist experience, preferably in manufacturing.
+
+ACCOUNTABILITIES
+1. Maintain accurate employee records in the HRMS (joining, exits, documents).
+2. Administer attendance, leave requests and regularisations.
+3. Coordinate recruitment: screening, interview scheduling, offer documentation.
+4. Support onboarding: induction plans, document collection, ID creation.
+5. Prepare HR letters, certificates and compliance reports.
+6. Handle employee queries on leave, salary and company policies.
+7. Uphold strict confidentiality of employee and salary data.
+
+JOB NATURE
+Full-time, office-based (Sharjah). Reports to the HR Manager.
+"""
+
+
+def _seed_v33_extras():
+    """Work locations, training LMS seed, a notice, and 2 demo JDs."""
+    from app import db
+    from app.models import (User, WorkLocation, TrainingCourse, QuizQuestion,
+                            TrainingAssignment, TrainingAttempt, Notice,
+                            Notification, JobDescription, JDAcknowledgement,
+                            Certification)
+    from app.files import store_file
+    from datetime import datetime
+
+    today = date.today()
+
+    # --- work location (demo coordinates, clearly editable) ---
+    if WorkLocation.query.count() == 0:
+        db.session.add(WorkLocation(
+            name="Head Office — Sharjah (Demo)",
+            latitude=25.3054, longitude=55.4248, radius_m=300,
+            is_active=True, created_by="HRADMIN"))
+
+    # --- training courses ---
+    if TrainingCourse.query.count() == 0:
+        pdf = (b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+               b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+               b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj\n"
+               b"trailer<</Root 1 0 R>>\n%%EOF")
+        c1 = TrainingCourse(
+            title="Safety Induction", category="Induction",
+            description=("Mandatory safety induction for all staff: PPE, "
+                         "emergency exits, fire safety, hot-work permits."),
+            material_kind="file",
+            material_path=store_file(pdf, "training", "pdf"),
+            pass_percent=70, issue_cert_name="HSE Safety Induction",
+            cert_valid_months=12, created_by="HRADMIN")
+        db.session.add(c1)
+        db.session.flush()
+        for i, (q, opts, ci) in enumerate([
+            ("What must you wear before entering the welding bay?",
+             ["Safety helmet and goggles", "Sandals", "Shorts", "Nothing"],
+             0),
+            ("In case of fire, you should:",
+             ["Run immediately", "Raise the alarm and use the nearest exit",
+              "Hide", "Continue working"], 1),
+            ("A hot-work permit is required for:",
+             ["Desk work", "Welding and grinding", "Meetings", "Lunch"], 1),
+        ]):
+            db.session.add(QuizQuestion(course_id=c1.id, question=q,
+                                        options_json=json.dumps(opts),
+                                        correct_index=ci, sort=i))
+        c2 = TrainingCourse(
+            title="Company Orientation", category="Orientation",
+            description="Company history, values, policies and ESS usage.",
+            material_kind="link",
+            material_url="https://example.com/orientation-demo",
+            pass_percent=70, created_by="HRADMIN")
+        db.session.add(c2)
+        db.session.flush()
+        for u in User.query.filter_by(is_active=True).all():
+            db.session.add(TrainingAssignment(course_id=c1.id, user_id=u.id,
+                                              assigned_by="HRADMIN"))
+        db.session.add(TrainingAttempt(
+            course_id=c1.id, user_id="EMP001", score_percent=100.0,
+            passed=True, answers_json="[0, 1, 1]"))
+        if not Certification.query.filter_by(
+                user_id="EMP001", name="HSE Safety Induction").first():
+            db.session.add(Certification(
+                user_id="EMP001", name="HSE Safety Induction",
+                issuer="Internal Training", issue_date=today,
+                expiry_date=today + timedelta(days=365),
+                created_by="HRADMIN"))
+
+    # --- a demo notice (mandatory read) ---
+    if Notice.query.count() == 0:
+        n = Notice(
+            title="Welcome to the new Employee Self-Service",
+            body=("This portal is now your home for leave requests, "
+                  "attendance, payslips, training, celebrations and more. "
+                  "Please read this notice and acknowledge it."),
+            audience="all", requires_ack=True, created_by="HRADMIN")
+        db.session.add(n)
+        db.session.flush()
+        for u in User.query.filter_by(is_active=True).all():
+            db.session.add(Notification(
+                user_id=u.id, kind="notice", title=n.title, body=n.body,
+                link=f"/notices/{n.id}", ref_id=n.id))
+
+    # --- demo job descriptions ---
+    if JobDescription.query.count() == 0:
+        jd1 = JobDescription(title="Welder", department="Production",
+                             reports_to="Production Manager", body=_WELDER_JD,
+                             created_by="HRADMIN")
+        jd2 = JobDescription(title="HR Executive", department="Human Resources",
+                             reports_to="HR Manager", body=_HR_EXEC_JD,
+                             created_by="HRADMIN")
+        db.session.add_all([jd1, jd2])
+        db.session.flush()
+        for u in User.query.filter(User.designation == "Welder",
+                                   User.is_active.is_(True)).all():
+            db.session.add(JDAcknowledgement(
+                jd_id=jd1.id, user_id=u.id, jd_version=jd1.version,
+                assigned_by="HRADMIN"))
+            db.session.add(Notification(
+                user_id=u.id, kind="jd",
+                title=f"Your Job Description is ready: {jd1.title}",
+                body="Please read and acknowledge with your signature.",
+                link="/my-jd"))
+        # pre-acknowledge one welder so the HR dashboard shows both states
+        first = JDAcknowledgement.query.filter_by(jd_id=jd1.id).first()
+        if first:
+            sig = _demo_signature_png()
+            first.signature_path = store_file(sig, "signatures", "jpg")
+            first.typed_name = "Demo Employee"
+            first.signer_ip = "127.0.0.1"
+            first.status = "acknowledged"
+            first.jd_version = jd1.version
+            first.acknowledged_at = datetime.utcnow()
+
+    db.session.flush()
+
+
+def _seed_v34_extras():
+    """v3.4 approval matrix: HR team flags + demo approval chains.
+
+    Idempotent: flags are backfilled for existing users, and the demo
+    chains are re-applied (only in demo mode).
+    """
+    from app import db
+    from app.models import User
+    from app.approvals import set_demo_matrices
+    hradmin = db.session.get(User, "HRADMIN")
+    if hradmin is not None and not hradmin.is_hr_manager:
+        hradmin.is_hr_manager = True
+    fatima = db.session.get(User, "EMP005")
+    if fatima is not None and not fatima.is_hr_staff:
+        fatima.is_hr_staff = True
+    db.session.flush()
+    set_demo_matrices()

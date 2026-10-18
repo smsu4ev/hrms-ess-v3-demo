@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Approval Matrix{% endblock %}
+{% block content %}
+<h2>Approval Matrix</h2>
+<p class="muted">Define the approval chain for each process. Steps run in order;
+   any one eligible approver at a step may act (first action wins). Changing a
+   chain never affects requests that are already in flight — they keep the
+   steps they started with.</p>
+
+{% for proc in matrices %}
+<div class="formcard">
+<h3>{{ proc.label }} <span class="muted">({{ proc.key }})</span></h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Step</th><th>Approver</th><th>Resolves to today</th><th>Order</th><th></th></tr>
+  {% for sv in proc.steps %}
+  <tr>
+    <td>{{ sv.step.step_no }}</td>
+    <td><strong>{{ sv.label }}</strong></td>
+    <td class="muted">{{ sv.preview }}</td>
+    <td>
+      <form method="post" class="inlineform">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="process_key" value="{{ proc.key }}">
+        <input type="hidden" name="step_id" value="{{ sv.step.id }}">
+        <button class="btn small" type="submit" name="action" value="move_up" title="Move up">&uarr;</button>
+        <button class="btn small" type="submit" name="action" value="move_down" title="Move down">&darr;</button>
+      </form>
+    </td>
+    <td>
+      <form method="post" class="inlineform">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="process_key" value="{{ proc.key }}">
+        <input type="hidden" name="step_id" value="{{ sv.step.id }}">
+        <button class="btn small danger" type="submit" name="action" value="delete_step">Remove</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+<form method="post" class="inlineform">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="process_key" value="{{ proc.key }}">
+  <input type="hidden" name="action" value="add_step">
+  <label>Approver type
+    <select name="approver_type">
+      {% for code, label in approver_types %}
+      <option value="{{ code }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>User (only for Specific User)
+    <select name="approver_user_id">
+      <option value="">-- choose --</option>
+      {% for u in users %}
+      <option value="{{ u.id }}">{{ u.name }} ({{ u.id }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button class="btn small primary" type="submit">Add Step</button>
+</form>
+</div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Quiz - {{ course.title }}{% endblock %}
+{% block content %}
+<h2>Quiz: {{ course.title }}</h2>
+<p class="muted">Answer all questions. Pass mark: {{ course.pass_percent }}%. You can retake.</p>
+<form method="post" class="formcard">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% for q in questions %}
+  <div class="quiz-q">
+    <p><strong>Q{{ loop.index }}.</strong> {{ q.question | e }}</p>
+    {% for opt in q.options %}
+    <label class="quiz-opt"><input type="radio" name="q_{{ q.id }}" value="{{ loop.index0 }}" required> {{ opt | e }}</label>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  <button class="btn primary" type="submit">Submit answers</button>
+</form>
+{% endblock %}

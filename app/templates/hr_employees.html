@@ -17,7 +17,7 @@
       <select name="status">
         <option value="">All</option>
         {% for s in statuses %}
-        <option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s|title }}</option>
+        <option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s.replace('_', ' ')|title }}</option>
         {% endfor %}
       </select>
     </label>
@@ -33,7 +33,8 @@
     <td><a href="{{ url_for('hrms.employee_detail', uid=u.id) }}">{{ u.id }}</a></td>
     <td>{{ u.name }}</td><td>{{ u.designation or '-' }}</td><td>{{ u.department or '-' }}</td>
     <td>{{ u.reporting_manager or '-' }}</td>
-    <td><span class="badge {{ u.employment_status }}">{{ u.employment_status }}</span></td>
+    <td><span class="badge {{ u.employment_status }}">{{ u.employment_status.replace('_', ' ')|title }}</span>
+      {% if u.employment_status == 'pending_approval' %}<a class="btn small" href="{{ url_for('hrms.employee_review', uid=u.id) }}">Review</a>{% endif %}</td>
     <td>{{ u.visa_expiry_date or '-' }}</td><td>{{ u.passport_expiry_date or '-' }}</td>
   </tr>
   {% else %}<tr><td colspan="9" class="muted">No employees found.</td></tr>{% endfor %}

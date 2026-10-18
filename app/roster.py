@@ -91,6 +91,16 @@ def _md_label(md):
         return md
 
 
+def _midday_outdoor_warning(s, shift, day):
+    """v3.2.1: warn (do not block) when an outdoor shift is assigned on a
+    date inside the summer midday-break season."""
+    if shift and shift.is_outdoor and _in_midday_season(s, day):
+        return (f"Midday break {s.midday_break_start}\u2013{s.midday_break_end} applies "
+                f"to outdoor work on {day.isoformat()} ({shift.code}) \u2014 ensure "
+                f"the shift plan covers it.")
+    return None
+
+
 def _visible_employees():
     """Admin sees everyone; a non-admin manager sees only their department."""
     q = User.query.filter(User.is_active.is_(True))
@@ -124,7 +134,8 @@ def shifts():
                 brk, grace = 60, 10
             db.session.add(ShiftPattern(
                 code=code, name=f.get("name").strip(), start_time=start,
-                end_time=end, break_minutes=brk, grace_minutes=grace))
+                end_time=end, break_minutes=brk, grace_minutes=grace,
+                is_outdoor=bool(f.get("is_outdoor"))))
             record("shift_pattern_created", code, entity="shift_pattern", entity_id=code)
             db.session.commit()
             flash(f"Shift {code} created.", "success")
@@ -170,13 +181,39 @@ def roster():
             RosterAssignment.date >= days[0],
             RosterAssignment.date <= days[-1]).all():
         assign[(a.user_id, a.date.isoformat())] = a
+    # v3.2.1: detect runs of >= 7 consecutive assigned days (no weekly rest)
+    # across an extended window [week-1 .. week+6].
+    ext0, ext1 = days[0] - timedelta(days=1), days[-1] + timedelta(days=1)
+    visible_ids = {u.id for u in employees}
+    by_user = {}
+    ext_q = RosterAssignment.query.filter(
+        RosterAssignment.date >= ext0,
+        RosterAssignment.date <= ext1)
+    if visible_ids:
+        ext_q = ext_q.filter(RosterAssignment.user_id.in_(visible_ids))
+    for a in ext_q.all():
+        by_user.setdefault(a.user_id, set()).add(a.date)
+    no_rest = set()
+    for uid, dates in by_user.items():
+        run = 0
+        d = ext0
+        flagged = False
+        while d <= ext1:
+            run = run + 1 if d in dates else 0
+            if run >= 7 and days[0] <= d <= days[-1]:
+                flagged = True
+                break
+            d += timedelta(days=1)
+        if flagged:
+            no_rest.add(uid)
     rows = []
     for u in employees:
         cells = []
         for d in days:
             a = assign.get((u.id, d.isoformat()))
             cells.append({"date": d, "assignment": a})
-        rows.append({"user": u, "cells": cells})
+        rows.append({"user": u, "cells": cells,
+                     "no_rest": u.id in no_rest})
     banners = []
     if any(_in_ramadan(s, d) for d in days):
         banners.append(
@@ -216,6 +253,8 @@ def roster_bulk():
     off_days = {"friday": {4}, "sunday": {6}}.get(skip_off, set())
     overwrite = bool(f.get("overwrite"))
     assigned = kept = skipped_off = 0
+    midday_warned = 0
+    s = get_settings()
     for u in targets:
         d = frm
         while d <= to:
@@ -232,6 +271,8 @@ def roster_bulk():
                         user_id=u.id, date=d, shift_id=shift.id,
                         created_by=current_user.id))
                     assigned += 1
+                    if shift.is_outdoor and _in_midday_season(s, d):
+                        midday_warned += 1
             d += timedelta(days=1)
     record("roster_bulk_assigned",
            f"{shift.code} {frm}..{to} scope={scope} assigned={assigned} kept={kept}",
@@ -240,6 +281,10 @@ def roster_bulk():
     flash(f"Roster updated: {assigned} assigned, {kept} existing kept "
           f"(tick Overwrite to replace), {skipped_off} weekly-off day(s) skipped.",
           "success")
+    if midday_warned:
+        flash(f"Midday break {s.midday_break_start}\u2013{s.midday_break_end} applies "
+              f"to outdoor work on {midday_warned} assigned date(s) inside the "
+              f"summer season \u2014 ensure the shift plans cover it.", "warning")
     return redirect(url_for("roster.roster", week=frm.isoformat()))
 
 
@@ -268,6 +313,9 @@ def roster_assign():
             record("roster_assigned", f"{user.id} {d} -> {shift.code}",
                    entity="roster", entity_id=user.id)
             flash(f"{user.name}: {d.isoformat()} set to {shift.code}.", "success")
+            warn = _midday_outdoor_warning(get_settings(), shift, d)
+            if warn:
+                flash(warn, "warning")
         else:
             record("roster_cleared", f"{user.id} {d}", entity="roster",
                    entity_id=user.id)

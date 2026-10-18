@@ -102,6 +102,7 @@ h3 { color: var(--navy); margin: 20px 0 10px; font-weight: 600; }
 .flash.success { background: #d1fae5; color: #065f46; }
 .flash.error { background: #fee2e2; color: #991b1b; }
 .flash.info { background: #dbeafe; color: #1e40af; }
+.flash.warning { background: #fef3c7; color: #92400e; }
 .pager { margin: 10px 0; display: flex; gap: 8px; }
 .cal td { height: 74px; vertical-align: top; width: 14.2%; }
 .cal td.empty { background: #f3f4f6; }
@@ -264,6 +265,7 @@ span.warn { background: #fde8e8; color: #a32020; font-weight: 700; padding: 2px 
 /* ---- V3.2: roster + settlement ---- */
 .chip{display:inline-block;padding:2px 10px;border-radius:999px;background:#eef1f6;color:#334;font-size:12px;font-weight:600;white-space:nowrap}
 .chip-night{background:#1b2437;color:#ffd166}
+.chip-warn{background:#fde8e8;color:#a12222}
 .banner{background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:10px 14px;margin:12px 0;font-size:14px}
 .warn-banner{background:#fff3f0;border-color:#ef9a9a}
 .roster-grid td.roster-cell{text-align:center;vertical-align:top}
@@ -272,3 +274,37 @@ tr.today{background:#f0f7ff}
 .stmt{border:1px solid #ddd;border-radius:8px;padding:18px;margin:14px 0;background:#fff}
 .stmt-head h3{margin:0 0 8px}
 @media print{.formcard,.banner{display:none!important}}
+
+/* ================= HRMS+ESS v3.3: engagement ================= */
+.bell { position: relative; display: inline-flex; align-items: center; margin-left: 8px; color: inherit; }
+.bell .nav-ico { display: inline-flex; }
+.bell .nav-ico svg { width: 22px; height: 22px; }
+.nbadge { position: absolute; top: -6px; right: -8px; background: #d43f3f; color: #fff;
+  font-size: 11px; font-weight: 700; border-radius: 999px; padding: 0 6px; line-height: 18px; min-width: 18px; text-align: center; }
+.punch-card { text-align: center; }
+.btn.big { font-size: 1.15rem; padding: 14px 28px; min-height: 56px; }
+.punch-status { margin-top: 12px; padding: 10px 14px; border-radius: 8px; background: #f1f3f9; }
+.punch-status.ok { background: #e6f6ec; color: #1c7c3c; font-weight: 600; }
+.punch-status.err { background: #fdecea; color: #b3261e; font-weight: 600; }
+.notif-list { display: flex; flex-direction: column; gap: 8px; }
+.notif { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #e2e6f0; border-radius: 10px; background: #fff; }
+.notif.unread { border-left: 4px solid #5e72e4; background: #f6f8ff; }
+.notif-body { flex: 1; }
+.notif-kind { text-transform: capitalize; }
+.celeb-card { margin-bottom: 14px; }
+.celeb-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.reactions { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.react-btn { font-size: 1.2rem; padding: 4px 8px; border: 1px solid #dfe3ee; border-radius: 999px; background: #fff; cursor: pointer; }
+.react-btn .count { font-size: .8rem; color: #5e6a85; }
+.react-btn.mine { border-color: #5e72e4; background: #eef1fd; }
+.wish-msg { padding: 6px 0; border-top: 1px dashed #e2e6f0; }
+.wish-form { display: flex; gap: 8px; margin-top: 8px; }
+.wish-form input[type="text"] { flex: 1; }
+.quiz-q { margin-bottom: 14px; }
+.quiz-opt { display: block; padding: 6px 0; }
+.quiz-opt input { margin-right: 8px; }
+.correct { color: #1c7c3c; font-weight: 600; }
+.jd-body { white-space: normal; line-height: 1.55; }
+.notice-body { line-height: 1.55; }
+.warn-card { border-left: 4px solid #e6a23c; }
+.small { font-size: .85em; }

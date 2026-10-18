@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ course.title }}{% endblock %}
+{% block content %}
+<h2>{{ course.title }}</h2>
+<p class="muted">{{ course.category }} &middot; Pass mark {{ course.pass_percent }}%
+{% if course.issue_cert_name %} &middot; Issues certificate: {{ course.issue_cert_name }}{% if course.cert_valid_months %} ({{ course.cert_valid_months }} months){% endif %}{% endif %}</p>
+
+<div class="twocol">
+<div>
+<h3>Quiz questions ({{ questions|length }})</h3>
+{% for q in questions %}
+<div class="formcard">
+  <p><strong>Q{{ loop.index }}.</strong> {{ q.question | e }}</p>
+  <ol>{% for o in q.options %}<li{% if loop.index0 == q.correct_index %} class="correct"{% endif %}>{{ o | e }}</li>{% endfor %}</ol>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="del_question">
+    <input type="hidden" name="qid" value="{{ q.id }}">
+    <button class="btn small danger" type="submit">Delete question</button>
+  </form>
+</div>
+{% endfor %}
+<div class="formcard">
+  <h3>Add question</h3>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="add_question">
+    <label>Question <textarea name="question" rows="2" required></textarea></label>
+    {% for i in range(4) %}
+    <label>Option {{ i + 1 }} <input type="text" name="opt_{{ i }}" maxlength="500" required></label>
+    {% endfor %}
+    <label>Correct option
+      <select name="correct">{% for i in range(4) %}<option value="{{ i }}">Option {{ i + 1 }}</option>{% endfor %}</select>
+    </label>
+    <button class="btn small primary" type="submit">Add question</button>
+  </form>
+</div>
+</div>
+<div>
+<h3>Assign course</h3>
+<div class="formcard">
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="assign">
+    <label>Assign to
+      <select name="scope" required>
+        <option value="all">All employees</option>
+        {% for d in departments %}<option value="dept:{{ d }}">{{ d }}</option>{% endfor %}
+      </select>
+    </label>
+    <p class="muted small">To assign a single employee, use the form below.</p>
+    <label>Single employee ID <input type="text" name="single_user" maxlength="20" placeholder="e.g. EMP001"></label>
+    <label>Due date (optional) <input type="date" name="due_date"></label>
+    <button class="btn small primary" type="submit">Assign</button>
+  </form>
+</div>
+<h3>Assigned ({{ assigns|length }})</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Employee</th><th>Due</th><th>Best score</th></tr>
+  {% for a in assigns %}
+  {% set u = users.get(a.user_id) %}
+  <tr><td>{{ u.name if u else a.user_id }} ({{ a.user_id }})</td>
+      <td>{{ a.due_date or '-' }}</td>
+      <td>-</td></tr>
+  {% endfor %}
+</table></div>
+<h3>Recent attempts ({{ attempts|length }})</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Employee</th><th>Score</th><th>Result</th><th>When</th></tr>
+  {% for t in attempts %}
+  {% set u = users.get(t.user_id) %}
+  <tr><td>{{ u.name if u else t.user_id }} ({{ t.user_id }})</td>
+      <td>{{ t.score_percent }}%</td>
+      <td><span class="badge {{ 'approved' if t.passed else 'rejected' }}">{{ 'Pass' if t.passed else 'Fail' }}</span></td>
+      <td>{{ t.completed_at.strftime('%d %b %Y %H:%M') }}</td></tr>
+  {% endfor %}
+</table></div>
+</div>
+</div>
+<p><a href="{{ url_for('engagement.hr_training') }}">&larr; Back to courses</a></p>
+{% endblock %}

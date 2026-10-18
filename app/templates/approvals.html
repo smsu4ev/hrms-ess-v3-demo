@@ -1,11 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Leave Approvals{% endblock %}
+{% block title %}Approvals{% endblock %}
 {% block content %}
 <h2>Pending Leave Approvals</h2>
 <div class="tbl-wrap"><table class="tbl">
-  <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Reason</th><th>Applied</th><th>Decision</th></tr>
+  <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Reason</th><th>Applied</th><th>Chain</th><th>Decision</th></tr>
   {% for r in items %}
   {% set u = users.get(r.user_id) %}
+  {% set m = meta.get(r.id) %}
   <tr>
     <td>{{ u.name if u else r.user_id }} ({{ r.user_id }})</td>
     <td>{{ leave_types[r.leave_type].label if r.leave_type in leave_types else r.leave_type }}</td>
@@ -13,17 +14,49 @@
     <td>{{ r.days }}</td>
     <td>{{ r.reason or '-' }}</td>
     <td>{{ r.created_at.strftime('%Y-%m-%d') }}</td>
+    <td>{% if m %}<span class="chip">{{ m.badge }}</span>{% endif %}</td>
     <td>
+      {% if m and m.can_act %}
       <form method="post" action="{{ url_for('views.decide_leave', req_id=r.id) }}" class="inlineform">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="text" name="comment" placeholder="Comment (optional)" size="16">
         <button class="btn small primary" type="submit" name="action" value="approve">Approve</button>
         <button class="btn small danger" type="submit" name="action" value="reject">Reject</button>
       </form>
+      {% else %}<span class="muted">Awaiting another approver</span>{% endif %}
     </td>
   </tr>
   {% else %}
-  <tr><td colspan="7" class="muted">No pending requests.</td></tr>
+  <tr><td colspan="8" class="muted">No pending requests.</td></tr>
   {% endfor %}
+</table></div>
+
+<h2>Regularisation Awaiting Your Action</h2>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Employee</th><th>Date</th><th>Reason</th><th>Chain</th><th></th></tr>
+  {% for it in reg_items %}
+  <tr>
+    <td>{{ it.req.user_id }}</td>
+    <td>{{ it.req.date }}</td>
+    <td>{{ it.req.reason }}</td>
+    <td><span class="chip">{{ it.badge }}</span></td>
+    <td><a class="btn small" href="{{ url_for('views.regularisation_approvals') }}">Decide</a></td>
+  </tr>
+  {% else %}<tr><td colspan="5" class="muted">Nothing awaiting you.</td></tr>{% endfor %}
+</table></div>
+
+<h2>Employee Creations Awaiting Your Action</h2>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Employee ID</th><th>Name</th><th>Department</th><th>Designation</th><th>Chain</th><th></th></tr>
+  {% for it in creation_items %}
+  <tr>
+    <td>{{ it.user.id }}</td>
+    <td>{{ it.user.name }}</td>
+    <td>{{ it.user.department or '-' }}</td>
+    <td>{{ it.user.designation or '-' }}</td>
+    <td><span class="chip">{{ it.badge }}</span></td>
+    <td><a class="btn small" href="{{ url_for('hrms.employee_review', uid=it.user.id) }}">Review</a></td>
+  </tr>
+  {% else %}<tr><td colspan="6" class="muted">Nothing awaiting you.</td></tr>{% endfor %}
 </table></div>
 {% endblock %}

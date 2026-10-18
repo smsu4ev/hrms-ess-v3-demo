@@ -29,6 +29,20 @@ def manager_required(fn):
     return wrapper
 
 
+def approver_required(fn):
+    """v3.4: anyone who can plausibly hold an approval step — managers and
+    admins plus users flagged as HR staff or HR manager."""
+    from functools import wraps
+
+    @wraps(fn)
+    def wrapper(*a, **kw):
+        if not (current_user.is_manager or current_user.is_hr_staff
+                or current_user.is_hr_manager):
+            abort(403)
+        return fn(*a, **kw)
+    return wrapper
+
+
 # ---------------- Dashboard ----------------
 @views_bp.route("/")
 @login_required
@@ -51,12 +65,28 @@ def dashboard():
     if current_user.is_admin:
         from app.hrms import get_upcoming_expiries
         expiring_docs = get_upcoming_expiries(30)
+    # v3.3: engagement — today's celebrations, latest notices, mandatory reads.
+    from app.engagement import (ensure_todays_celebrations, visible_notices,
+                                pending_mandatory_notices)
+    ensure_todays_celebrations()
+    notices = visible_notices(current_user, limit=3)
+    mandatory = pending_mandatory_notices(current_user)
+    from app.models import CelebrationPost
+    from datetime import date as _date
+    today = _date.today()
+    todays_posts = CelebrationPost.query.filter_by(
+        post_date=today).order_by(CelebrationPost.id).all()
+    users = {u.id: u for u in User.query.filter(
+        User.id.in_([p.user_id for p in todays_posts])).all()} \
+        if todays_posts else {}
     return render_template("dashboard.html", balances=balances,
                            pending_leaves=pending_leaves,
                            open_grievances=open_grievances,
                            present_days=present,
                            approvals_pending=approvals_pending,
-                           expiring_docs=expiring_docs)
+                           expiring_docs=expiring_docs,
+                           notices=notices, mandatory=mandatory,
+                           todays_posts=todays_posts, post_users=users)
 
 
 # ---------------- Leave ----------------
@@ -95,13 +125,25 @@ def leave():
                     log_action(current_user.id, "leave_applied",
                                f"{ltype} {s} to {e} ({days}d)")
                     db.session.commit()
+                    # v3.4: start the approval-matrix chain for this request.
+                    from app.approvals import start_instance
+                    start_instance("leave", req.id, current_user.id,
+                                   current_user.id)
                     flash("Leave request submitted.", "success")
                     return redirect(url_for("views.leave"))
     balances = LeaveBalance.query.filter_by(user_id=current_user.id).all()
     requests = LeaveRequest.query.filter_by(user_id=current_user.id)\
         .order_by(LeaveRequest.created_at.desc()).limit(20).all()
+    # v3.4: per-request approval-chain progress for the employee's own list.
+    from app.approvals import get_instance, step_badge
+    badges = {}
+    for r in requests:
+        if r.status == "pending":
+            inst = get_instance("leave", r.id)
+            if inst:
+                badges[r.id] = step_badge(inst)
     return render_template("leave.html", balances=balances, requests=requests,
-                           leave_types=app_config.LEAVE_TYPES)
+                           leave_types=app_config.LEAVE_TYPES, badges=badges)
 
 
 @views_bp.route("/leave/<int:req_id>/cancel", methods=["POST"])
@@ -139,9 +181,17 @@ def attendance():
     weeks = calmod.monthcalendar(view_date.year, view_date.month)
     prev_m = month_start - timedelta(days=1)
     next_m = (month_end + timedelta(days=1)).replace(day=1)
+    # v3.3: recent geo/selfie punches for this month.
+    from app.models import PunchRecord, WorkLocation
+    punches = PunchRecord.query.filter(
+        PunchRecord.user_id == current_user.id,
+        PunchRecord.local_date >= month_start,
+        PunchRecord.local_date <= month_end)\
+        .order_by(PunchRecord.punched_at.desc()).limit(60).all()
+    locations = {l.id: l for l in WorkLocation.query.all()}
     return render_template("attendance.html", weeks=weeks, by_date=by_date,
                            view_date=view_date, prev_m=prev_m, next_m=next_m,
-                           today=today)
+                           today=today, punches=punches, locations=locations)
 
 
 # ---------------- Payslip ----------------
@@ -306,58 +356,71 @@ def acknowledge_evaluation(eid):
     return redirect(url_for("views.evaluations"))
 
 
-# ---------------- Approvals (manager/admin) ----------------
+# ---------------- Approvals (v3.4: unified matrix-driven inbox) ----------------
 @views_bp.route("/approvals")
 @login_required
-@manager_required
+@approver_required
 def approvals():
+    from app.approvals import (get_or_start_instance, can_act, step_badge,
+                               inbox_for)
+    from app.models import RegularisationRequest
+    # --- leave section (legacy default 1-step behaviour preserved)
     q = LeaveRequest.query.filter_by(status="pending")
     if not current_user.is_admin:
-        # Managers see requests from their own department only.
+        # Non-admins see requests from their own department only, and only
+        # the ones sitting on their own approval step.
         dept_users = [u.id for u in User.query.filter_by(
             department=current_user.department, is_active=True).all()]
         q = q.filter(LeaveRequest.user_id.in_(dept_users))
-    items = q.order_by(LeaveRequest.created_at.desc()).all()
+    leave_items = []
+    for r in q.order_by(LeaveRequest.created_at.desc()).all():
+        inst = get_or_start_instance("leave", r.id, r.user_id, r.user_id)
+        item_can_act = can_act(inst, current_user)
+        if current_user.is_admin or item_can_act:
+            leave_items.append({"req": r, "instance": inst,
+                                "badge": step_badge(inst),
+                                "can_act": item_can_act})
     users = {u.id: u for u in User.query.filter(
-        User.id.in_([r.user_id for r in items])).all()} if items else {}
-    return render_template("approvals.html", items=items, users=users,
-                           leave_types=app_config.LEAVE_TYPES)
+        User.id.in_([i["req"].user_id for i in leave_items])).all()} \
+        if leave_items else {}
+    # --- unified inbox: other chains awaiting this user
+    reg_items, creation_items = [], []
+    for inst in inbox_for(current_user):
+        if inst.process_key == "regularisation":
+            rr = RegularisationRequest.query.get(int(inst.ref_id))
+            if rr is not None and rr.status == "pending":
+                reg_items.append({"req": rr, "instance": inst,
+                                  "badge": step_badge(inst)})
+        elif inst.process_key == "employee_creation":
+            u = User.query.get(inst.ref_id)
+            if u is not None and u.employment_status == "pending_approval":
+                creation_items.append({"user": u, "instance": inst,
+                                       "badge": step_badge(inst)})
+    return render_template("approvals.html",
+                           items=[i["req"] for i in leave_items],
+                           meta={i["req"].id: i for i in leave_items},
+                           users=users, leave_types=app_config.LEAVE_TYPES,
+                           reg_items=reg_items,
+                           creation_items=creation_items)
 
 
-@views_bp.route("/approvals/<int:req_id>", methods=["POST"])
-@login_required
-@manager_required
-def decide_leave(req_id):
-    req = LeaveRequest.query.get_or_404(req_id)
-    if req.status != "pending":
-        flash("Request already decided.", "error")
-        return redirect(url_for("views.approvals"))
-    target = User.query.get(req.user_id)
-    if not current_user.is_admin and (not target or target.department != current_user.department):
-        abort(403)
-    action = request.form.get("action")
-    comment = (request.form.get("comment") or "").strip()[:500]
-    if action == "approve":
-        req.status = "approved"
-        bal = LeaveBalance.query.filter_by(
-            user_id=req.user_id, leave_type=req.leave_type).first()
-        if bal:
-            bal.used += req.days
-        else:
-            entitled = app_config.LEAVE_TYPES.get(req.leave_type, {}).get("entitled", 0)
-            db.session.add(LeaveBalance(user_id=req.user_id,
-                                        leave_type=req.leave_type,
-                                        entitled=entitled, used=req.days))
-        flash("Leave approved.", "success")
-    elif action == "reject":
-        req.status = "rejected"
-        flash("Leave rejected.", "success")
+def _leave_approve_side_effects(req, comment):
+    """Final-approval side-effects for leave (balance, status, outbox)."""
+    req.status = "approved"
+    bal = LeaveBalance.query.filter_by(
+        user_id=req.user_id, leave_type=req.leave_type).first()
+    if bal:
+        bal.used += req.days
     else:
-        abort(400)
+        entitled = app_config.LEAVE_TYPES.get(req.leave_type, {}).get("entitled", 0)
+        db.session.add(LeaveBalance(user_id=req.user_id,
+                                    leave_type=req.leave_type,
+                                    entitled=entitled, used=req.days))
     req.approver_id = current_user.id
     req.approver_comment = comment
     req.decided_at = datetime.utcnow()
-    log_action(current_user.id, f"leave_{req.status}", f"request #{req.id} ({req.user_id})")
+    log_action(current_user.id, f"leave_{req.status}",
+               f"request #{req.id} ({req.user_id})")
     from app.models import NotificationOutbox
     db.session.add(NotificationOutbox(
         user_id=req.user_id, channel="whatsapp",
@@ -365,6 +428,52 @@ def decide_leave(req_id):
         message=f"Your leave request ({app_config.LEAVE_TYPES.get(req.leave_type, {}).get('label', req.leave_type)}, "
                 f"{req.start_date} to {req.end_date}) has been {req.status}.",
         status="queued"))
+
+
+def _leave_reject_side_effects(req, comment):
+    req.status = "rejected"
+    req.approver_id = current_user.id
+    req.approver_comment = comment
+    req.decided_at = datetime.utcnow()
+    log_action(current_user.id, f"leave_{req.status}",
+               f"request #{req.id} ({req.user_id})")
+    from app.models import NotificationOutbox
+    db.session.add(NotificationOutbox(
+        user_id=req.user_id, channel="whatsapp",
+        event=f"leave_{req.status}",
+        message=f"Your leave request ({app_config.LEAVE_TYPES.get(req.leave_type, {}).get('label', req.leave_type)}, "
+                f"{req.start_date} to {req.end_date}) has been {req.status}.",
+        status="queued"))
+
+
+@views_bp.route("/approvals/<int:req_id>", methods=["POST"])
+@login_required
+@approver_required
+def decide_leave(req_id):
+    from app.approvals import get_or_start_instance, act
+    req = LeaveRequest.query.get_or_404(req_id)
+    if req.status != "pending":
+        flash("Request already decided.", "error")
+        return redirect(url_for("views.approvals"))
+    instance = get_or_start_instance("leave", req.id, req.user_id,
+                                     req.user_id)
+    action = request.form.get("action")
+    comment = (request.form.get("comment") or "").strip()[:500]
+    if action not in ("approve", "reject"):
+        abort(400)
+    try:
+        outcome = act(instance, current_user, action == "approve", comment)
+    except PermissionError:
+        abort(403)
+    if outcome == "rejected":
+        _leave_reject_side_effects(req, comment)
+        flash("Leave rejected.", "success")
+    elif outcome == "final_approved":
+        _leave_approve_side_effects(req, comment)
+        flash("Leave approved.", "success")
+    else:
+        flash("Approved at this step; forwarded to the next approver.",
+              "success")
     db.session.commit()
     return redirect(url_for("views.approvals"))
 
@@ -485,6 +594,10 @@ def regularisation():
             log_action(current_user.id, "regularisation_applied",
                        f"{d} in={cin or '-'} out={cout or '-'}")
             db.session.commit()
+            # v3.4: start the approval-matrix chain for this request.
+            from app.approvals import start_instance
+            start_instance("regularisation", rr.id, current_user.id,
+                           current_user.id)
             flash("Regularisation request submitted.", "success")
             return redirect(url_for("views.regularisation"))
     items = RegularisationRequest.query.filter_by(user_id=current_user.id)\
@@ -494,28 +607,35 @@ def regularisation():
 
 @views_bp.route("/regularisation/approve", methods=["GET", "POST"])
 @login_required
-@manager_required
+@approver_required
 def regularisation_approvals():
-    """Manager/HR approval list for regularisation requests."""
+    """Matrix-driven approval list for regularisation requests (v3.4)."""
+    from app.approvals import (get_or_start_instance, act, can_act,
+                               step_badge)
     q = RegularisationRequest.query.filter_by(status="pending")
-    if not current_user.is_admin:
-        dept_users = [u.id for u in User.query.filter_by(
-            department=current_user.department, is_active=True).all()]
-        q = q.filter(RegularisationRequest.user_id.in_(dept_users))
     if request.method == "POST":
         rid = int(request.form.get("rid", 0))
         rr = RegularisationRequest.query.get_or_404(rid)
         if rr.status != "pending":
             flash("Request already decided.", "error")
             return redirect(url_for("views.regularisation_approvals"))
-        target = User.query.get(rr.user_id)
-        if not current_user.is_admin and (not target or target.department != current_user.department):
-            abort(403)
+        instance = get_or_start_instance("regularisation", rr.id,
+                                         rr.user_id, rr.user_id)
         action = request.form.get("action")
         comment = (request.form.get("comment") or "").strip()[:500]
-        if action == "approve":
+        if action not in ("approve", "reject"):
+            abort(400)
+        try:
+            outcome = act(instance, current_user, action == "approve",
+                          comment)
+        except PermissionError:
+            abort(403)
+        if outcome == "rejected":
+            rr.status = "rejected"
+            flash("Regularisation rejected.", "success")
+        elif outcome == "final_approved":
             rr.status = "approved"
-            # Apply the correction to the attendance record on approval.
+            # Apply the correction to the attendance record on final approval.
             rec = AttendanceRecord.query.filter_by(user_id=rr.user_id, date=rr.date).first()
             if not rec:
                 rec = AttendanceRecord(user_id=rr.user_id, date=rr.date, status="present")
@@ -525,11 +645,9 @@ def regularisation_approvals():
             if rr.corrected_out:
                 rec.check_out = rr.corrected_out
             flash("Regularisation approved and attendance updated.", "success")
-        elif action == "reject":
-            rr.status = "rejected"
-            flash("Regularisation rejected.", "success")
         else:
-            abort(400)
+            flash("Approved at this step; forwarded to the next approver.",
+                  "success")
         rr.approver_id = current_user.id
         rr.approver_comment = comment
         rr.decided_at = datetime.utcnow()
@@ -541,10 +659,25 @@ def regularisation_approvals():
                      field_name="status", old_value="pending", new_value=rr.status)
         db.session.commit()
         return redirect(url_for("views.regularisation_approvals"))
-    items = q.order_by(RegularisationRequest.created_at.desc()).all()
+    items = []
+    for rr in q.order_by(RegularisationRequest.created_at.desc()).all():
+        inst = get_or_start_instance("regularisation", rr.id, rr.user_id,
+                                     rr.user_id)
+        item_can_act = can_act(inst, current_user)
+        if not current_user.is_admin:
+            # Non-admins see their own department's requests only, and only
+            # the ones sitting on their own approval step.
+            target = User.query.get(rr.user_id)
+            if not target or target.department != current_user.department:
+                continue
+            if not item_can_act:
+                continue
+        items.append({"rr": rr, "badge": step_badge(inst),
+                      "can_act": item_can_act})
     users = {u.id: u for u in User.query.filter(
-        User.id.in_([r.user_id for r in items])).all()} if items else {}
-    return render_template("regularisation_approvals.html", items=items, users=users)
+        User.id.in_([i["rr"].user_id for i in items])).all()} if items else {}
+    return render_template("regularisation_approvals.html", items=items,
+                           users=users)
 
 
 # ---------------- My Roster (employee, v3.2) ----------------

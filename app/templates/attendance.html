@@ -6,6 +6,7 @@
   <a class="btn small" href="{{ url_for('views.attendance', y=prev_m.year, m=prev_m.month) }}">&larr; Prev</a>
   <a class="btn small" href="{{ url_for('views.attendance') }}">This month</a>
   <a class="btn small" href="{{ url_for('views.attendance', y=next_m.year, m=next_m.month) }}">Next &rarr;</a>
+  <a class="btn small primary" data-no-pjax="1" href="{{ url_for('engagement.punch_page') }}">Check In / Out (GPS + Selfie)</a>
 </div>
 <div class="tbl-wrap"><table class="tbl cal">
   <tr><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr>
@@ -27,4 +28,19 @@
   </tr>
   {% endfor %}
 </table></div>
+{% if punches %}
+<h3>Geo check-in/out history (this month)</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Date</th><th>Type</th><th>Time (GST)</th><th>Location</th><th>Photo</th></tr>
+  {% for p in punches %}
+  <tr>
+    <td>{{ p.local_date }}</td>
+    <td><span class="badge {{ 'approved' if p.punch_type == 'in' else 'late' }}">{{ p.punch_type }}</span></td>
+    <td>{{ p.punched_at|gst_time }}</td>
+    <td>{{ locations[p.location_id].name if p.location_id and p.location_id in locations else 'Unrestricted' }}</td>
+    <td>{% if p.photo_path %}<a href="{{ url_for('engagement.punch_photo', pid=p.id) }}" target="_blank"><img src="{{ url_for('engagement.punch_photo', pid=p.id) }}" alt="selfie" style="width:48px;height:48px;object-fit:cover"></a>{% else %}<span class="muted">deleted</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% endif %}
 {% endblock %}

@@ -3,14 +3,17 @@
 {% block content %}
 <h2>Regularisation Approvals</h2>
 <div class="tbl-wrap"><table class="tbl">
-  <tr><th>Employee</th><th>Date</th><th>In</th><th>Out</th><th>Reason</th><th>Applied</th><th>Decision</th></tr>
-  {% for r in items %}
+  <tr><th>Employee</th><th>Date</th><th>In</th><th>Out</th><th>Reason</th><th>Applied</th><th>Chain</th><th>Decision</th></tr>
+  {% for it in items %}
+  {% set r = it.rr %}
   {% set u = users.get(r.user_id) %}
   <tr>
     <td>{{ u.name if u else r.user_id }} ({{ r.user_id }})</td>
     <td>{{ r.date }}</td><td>{{ r.corrected_in or '-' }}</td><td>{{ r.corrected_out or '-' }}</td>
     <td>{{ r.reason }}</td><td>{{ r.created_at.strftime('%Y-%m-%d') }}</td>
+    <td><span class="chip">{{ it.badge }}</span></td>
     <td>
+      {% if it.can_act %}
       <form method="post" action="{{ url_for('views.regularisation_approvals') }}" class="inlineform">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="rid" value="{{ r.id }}">
@@ -18,8 +21,9 @@
         <button class="btn small primary" type="submit" name="action" value="approve">Approve</button>
         <button class="btn small danger" type="submit" name="action" value="reject">Reject</button>
       </form>
+      {% else %}<span class="muted">Awaiting another approver</span>{% endif %}
     </td>
   </tr>
-  {% else %}<tr><td colspan="7" class="muted">No pending requests.</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="8" class="muted">No pending requests.</td></tr>{% endfor %}
 </table></div>
 {% endblock %}

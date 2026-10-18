@@ -80,7 +80,7 @@ def basic_salary(user_id, as_of):
     legacy User.basic_salary field so old records keep working."""
     a = assignments_as_of(user_id, as_of)
     if "BASIC" in a:
-        return a[1][1]
+        return a["BASIC"][1]
     user = User.query.get(user_id)
     return (user.basic_salary or 0.0) if user else 0.0
 
