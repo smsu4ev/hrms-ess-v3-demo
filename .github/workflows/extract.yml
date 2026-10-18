@@ -1,0 +1,70 @@
+name: One-shot package extraction (temporary)
+
+on:
+  push:
+    paths:
+      - "hrms-ess-v3.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract hrms-ess-v3.zip over repo root (excluding .github)
+        run: |
+          python3 - <<'PYEOF'
+          import os, shutil, zipfile
+
+          tmp = "__pkg_extract__"
+          if os.path.isdir(tmp):
+              shutil.rmtree(tmp)
+          with zipfile.ZipFile("hrms-ess-v3.zip") as zf:
+              zf.extractall(tmp)
+
+          entries = [e for e in os.listdir(tmp) if e != ".github"]
+          top = os.path.join(tmp, entries[0])
+          # tolerate a single top-level folder wrapping the package
+          root = top if (len(entries) == 1 and os.path.isdir(top)) else tmp
+
+          for name in os.listdir(root):
+              if name == ".github":
+                  continue
+              src = os.path.join(root, name)
+              dst = os.path.join(".", name)
+              if os.path.isdir(src):
+                  if os.path.isdir(dst):
+                      shutil.copytree(src, dst, dirs_exist_ok=True)
+                  else:
+                      if os.path.lexists(dst):
+                          os.remove(dst)
+                      shutil.copytree(src, dst)
+              else:
+                  if os.path.isdir(dst):
+                      shutil.rmtree(dst)
+                  shutil.copy2(src, dst)
+
+          shutil.rmtree(tmp)
+          print("extraction complete")
+          PYEOF
+
+      - name: Remove zip and this workflow
+        run: |
+          rm -f hrms-ess-v3.zip
+          rm -f .github/workflows/extract.yml
+
+      - name: Commit and push to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git status --porcelain | head -100
+          git commit -m "Deploy HRMS V3.1.1: extract updated code package (one-shot)" || echo "nothing to commit"
+          git push origin main
