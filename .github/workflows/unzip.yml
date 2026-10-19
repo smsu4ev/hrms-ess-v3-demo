@@ -1,0 +1,26 @@
+name: Unzip deploy package (one-shot)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Extract zip over repo root and delete it
+        run: |
+          unzip -o hrms-ess-v3.zip -d .
+          rm -f hrms-ess-v3.zip
+
+      - name: Commit and push as github-actions bot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Extract hrms-ess-v3.zip contents to repo root (one-shot)" || echo "nothing to commit"
+          git push
