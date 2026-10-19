@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% block title %}HRMS{% endblock %} - {{ company_name }}</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=2">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=4">
 </head>
 <body>
 {% if current_user.is_authenticated %}
@@ -27,6 +27,9 @@
 <div class="layout">
   <nav class="sidebar" id="sidebar" aria-label="Main navigation">
     <a href="{{ url_for('views.dashboard') }}"><span class="nav-ico">{{ icon('home') }}</span><span class="nav-txt">Dashboard</span></a>
+    <div class="navgroup" data-navgroup>
+      <button type="button" class="navgroup-head" aria-expanded="false"><span class="navgroup-name">My Self-Service</span><svg class="navchev" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg></button>
+      <div class="navgroup-body"><div class="navgroup-inner">
     <a href="{{ url_for('extras.inbox') }}"><span class="nav-ico">{{ icon('mail') }}</span><span class="nav-txt">Inbox</span></a>
     <a href="{{ url_for('views.leave') }}"><span class="nav-ico">{{ icon('calendar') }}</span><span class="nav-txt">Leave</span></a>
     <a href="{{ url_for('views.attendance') }}"><span class="nav-ico">{{ icon('clock') }}</span><span class="nav-txt">Attendance</span></a>
@@ -43,17 +46,25 @@
     <a href="{{ url_for('engagement.my_training') }}"><span class="nav-ico">{{ icon('graduation') }}</span><span class="nav-txt">My Training</span></a>
     <a href="{{ url_for('engagement.my_jd') }}"><span class="nav-ico">{{ icon('file') }}</span><span class="nav-txt">My Job Description</span></a>
     <a href="{{ url_for('engagement.celebrations') }}"><span class="nav-ico">{{ icon('star') }}</span><span class="nav-txt">Celebrations</span></a>
+      </div></div>
+    </div>
     {% if current_user.is_manager %}
-    <div class="navhead">Manager</div>
+    <div class="navgroup" data-navgroup>
+      <button type="button" class="navgroup-head" aria-expanded="false"><span class="navgroup-name">Manager</span><svg class="navchev" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg></button>
+      <div class="navgroup-body"><div class="navgroup-inner">
     <a href="{{ url_for('views.approvals') }}"><span class="nav-ico">{{ icon('check') }}</span><span class="nav-txt">Leave Approvals</span></a>
     <a href="{{ url_for('extras.team_overview') }}"><span class="nav-ico">{{ icon('users') }}</span><span class="nav-txt">Team Overview</span></a>
     <a href="{{ url_for('views.regularisation_approvals') }}"><span class="nav-ico">{{ icon('pencil') }}</span><span class="nav-txt">Regularisation Approvals</span></a>
     <a href="{{ url_for('views.evaluations_manage') }}"><span class="nav-ico">{{ icon('star') }}</span><span class="nav-txt">Evaluations</span></a>
     <a href="{{ url_for('views.grievance_inbox') }}"><span class="nav-ico">{{ icon('chat') }}</span><span class="nav-txt">Grievance Inbox</span></a>
     <a href="{{ url_for('helpdesk.hr_tickets') }}"><span class="nav-ico">{{ icon('clipboard') }}</span><span class="nav-txt">Helpdesk Queue</span></a>
+      </div></div>
+    </div>
     {% endif %}
     {% if current_user.is_admin or can_view_salary %}
-    <div class="navhead">Payroll</div>
+    <div class="navgroup" data-navgroup>
+      <button type="button" class="navgroup-head" aria-expanded="false"><span class="navgroup-name">Payroll</span><svg class="navchev" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg></button>
+      <div class="navgroup-body"><div class="navgroup-inner">
     <a href="{{ url_for('payroll.runs') }}"><span class="nav-ico">{{ icon('money') }}</span><span class="nav-txt">Payroll Runs</span></a>
     <a href="{{ url_for('payroll.loans') }}"><span class="nav-ico">{{ icon('card') }}</span><span class="nav-txt">Loans &amp; Advances</span></a>
     <a href="{{ url_for('payroll.components') }}"><span class="nav-ico">{{ icon('chart') }}</span><span class="nav-txt">Salary Components</span></a>
@@ -62,9 +73,13 @@
     <a href="{{ url_for('payroll.wps') }}"><span class="nav-ico">{{ icon('download') }}</span><span class="nav-txt">WPS Files</span></a>
     <a href="{{ url_for('payroll.letters') }}"><span class="nav-ico">{{ icon('mail') }}</span><span class="nav-txt">Letters</span></a>
     <a href="{{ url_for('docs.hr_documents') }}"><span class="nav-ico">{{ icon('file') }}</span><span class="nav-txt">Document Vault</span></a>
+      </div></div>
+    </div>
     {% endif %}
     {% if current_user.is_manager %}
-    <div class="navhead">Retail Operations</div>
+    <div class="navgroup" data-navgroup>
+      <button type="button" class="navgroup-head" aria-expanded="false"><span class="navgroup-name">Retail Operations</span><svg class="navchev" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg></button>
+      <div class="navgroup-body"><div class="navgroup-inner">
     <a href="{{ url_for('roster.shifts') }}"><span class="nav-ico">{{ icon('clock') }}</span><span class="nav-txt">Shift Patterns</span></a>
     <a href="{{ url_for('roster.roster') }}"><span class="nav-ico">{{ icon('calendar') }}</span><span class="nav-txt">Weekly Roster</span></a>
     {% if current_user.is_admin or current_user.can_view_salary %}
@@ -79,9 +94,13 @@
     <a href="{{ url_for('retail.hse') }}"><span class="nav-ico">{{ icon('alert') }}</span><span class="nav-txt">HSE Incidents</span></a>
     <a href="{{ url_for('retail.contractors') }}"><span class="nav-ico">{{ icon('usercheck') }}</span><span class="nav-txt">Contractors</span></a>
     <a href="{{ url_for('retail.separations') }}"><span class="nav-ico">{{ icon('idcard') }}</span><span class="nav-txt">Separations</span></a>
+      </div></div>
+    </div>
     {% endif %}
     {% if current_user.is_admin %}
-    <div class="navhead">HRMS Admin</div>
+    <div class="navgroup" data-navgroup>
+      <button type="button" class="navgroup-head" aria-expanded="false"><span class="navgroup-name">HRMS Admin</span><svg class="navchev" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg></button>
+      <div class="navgroup-body"><div class="navgroup-inner">
     <a href="{{ url_for('hrms.employees') }}"><span class="nav-ico">{{ icon('users') }}</span><span class="nav-txt">Employee Central</span></a>
     <a href="{{ url_for('hrms.compliance') }}"><span class="nav-ico">{{ icon('scales') }}</span><span class="nav-txt">Compliance</span></a>
     <a href="{{ url_for('hrms.gratuity_calc') }}"><span class="nav-ico">{{ icon('money') }}</span><span class="nav-txt">Gratuity Calculator</span></a>
@@ -94,12 +113,18 @@
     <a href="{{ url_for('admin.audit') }}"><span class="nav-ico">{{ icon('report') }}</span><span class="nav-txt">Audit Log</span></a>
     <a href="{{ url_for('admin.attendance_import') }}"><span class="nav-ico">{{ icon('download') }}</span><span class="nav-txt">Import Attendance</span></a>
     <a href="{{ url_for('admin.outbox') }}"><span class="nav-ico">{{ icon('phone') }}</span><span class="nav-txt">WhatsApp Outbox</span></a>
-    <div class="navhead">Engagement</div>
+      </div></div>
+    </div>
+    <div class="navgroup" data-navgroup>
+      <button type="button" class="navgroup-head" aria-expanded="false"><span class="navgroup-name">Engagement</span><svg class="navchev" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l4 4-4 4"/></svg></button>
+      <div class="navgroup-body"><div class="navgroup-inner">
     <a href="{{ url_for('engagement.locations') }}"><span class="nav-ico">{{ icon('building') }}</span><span class="nav-txt">Work Locations</span></a>
     <a href="{{ url_for('engagement.hr_punches') }}"><span class="nav-ico">{{ icon('clock') }}</span><span class="nav-txt">Punch Records</span></a>
     <a href="{{ url_for('engagement.notices') }}"><span class="nav-ico">{{ icon('bell') }}</span><span class="nav-txt">Notices</span></a>
     <a href="{{ url_for('engagement.hr_training') }}"><span class="nav-ico">{{ icon('graduation') }}</span><span class="nav-txt">Training Courses</span></a>
     <a href="{{ url_for('engagement.jds') }}"><span class="nav-ico">{{ icon('file') }}</span><span class="nav-txt">Job Descriptions</span></a>
+      </div></div>
+    </div>
     {% endif %}
   </nav>
   <main class="content" id="pjax-main" data-pjax>
@@ -124,7 +149,7 @@
   {% endif %}
   <a href="{{ url_for('views.profile') }}"><span class="bnav-ico">{{ icon('user') }}</span><span class="bnav-txt">Profile</span></a>
 </nav>
-<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=2"></script>
 {% else %}
 <main class="authpage">
   {% with messages = get_flashed_messages(with_categories=true) %}
