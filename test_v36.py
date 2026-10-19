@@ -315,6 +315,23 @@ login("T36-ADM", "pw-T36-ADM")
 r = client.get("/ws/me")
 check("workspace pages have no doodle reference", b"doodle-bg.svg" not in r.data)
 
+# ================= 9) bottom nav hidden on desktop (V3.6.2 regression) =================
+# The mobile bottom bar must have a base display:none rule BEFORE the
+# <=860px media query that enables it; without it the bar leaks onto
+# desktop pages as an unstyled vertical icon column (user report
+# 2026-10-19). Check the raw stylesheet structure.
+import pathlib
+_css = pathlib.Path("app/static/style.css").read_text()
+_media_at = _css.find("@media (max-width: 860px)")
+_base = _css[:_media_at] if _media_at > 0 else ""
+check("bottomnav base rule hides it on desktop",
+      ".bottomnav { display: none" in _base)
+_mobile = _css[_media_at:] if _media_at > 0 else ""
+check("bottomnav enabled inside mobile media query",
+      ".bottomnav { display: flex" in _mobile)
+r = client.get("/ws/me")
+check("pages link the bumped stylesheet v=7", b"style.css?v=7" in r.data)
+
 print()
 print(f"V3.6: {len(passed)} passed, {len(failed)} failed")
 if failed:

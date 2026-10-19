@@ -87,6 +87,7 @@ html[data-theme="dark"] .authpage { background: var(--bg); }
 .authcard .hint { margin-top: 16px; font-size: 12px; color: var(--muted); line-height: 1.6; }
 
 /* ================= Desk shell: rail + sidebar + content ================= */
+.bottomnav { display: none; } /* mobile-only bar; the <=860px media query turns it on */
 .rail { position: fixed; top: 0; left: 0; bottom: 0; width: var(--rail-w); background: var(--card);
   border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center;
   padding: 10px 0; z-index: 700; }
