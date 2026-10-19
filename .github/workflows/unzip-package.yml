@@ -1,0 +1,76 @@
+name: Unzip package into repo
+
+on:
+  workflow_dispatch:
+    inputs:
+      attachment_file:
+        description: 'Attachment file'
+        required: false
+        default: 'hrms-ess-v3.zip'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract package contents over repo root (keep .github)
+        env:
+          ATTACHMENT_FILE: ${{ inputs.attachment_file }}
+        run: |
+          python3 - <<'PYEOF'
+          import os, zipfile, pathlib, shutil
+          zip_name = os.environ.get('ATTACHMENT_FILE', 'hrms-ess-v3.zip') or 'hrms-ess-v3.zip'
+          root = pathlib.Path('.')
+          pkg = pathlib.Path('/tmp/pkg')
+          zippath = root / zip_name
+          if not zippath.is_file():
+              raise SystemExit('ERROR: %s not found in repo root' % zip_name)
+          if pkg.exists():
+              shutil.rmtree(pkg)
+          pkg.mkdir(parents=True)
+          with zipfile.ZipFile(zippath) as z:
+              members = [m for m in z.infolist()
+                         if m.filename != '.github' and not m.filename.startswith('.github/')]
+              z.extractall(pkg, members=members)
+          src = pkg
+          if not (src / 'render.yaml').exists():
+              sub = [d for d in src.iterdir() if d.is_dir() and (d / 'render.yaml').exists()]
+              if sub:
+                  src = sub[0]
+              else:
+                  raise SystemExit('ERROR: render.yaml not found in package')
+          keep = {'.git', '.github', 'instance', zip_name}
+          for item in root.iterdir():
+              if item.name in keep:
+                  continue
+              if item.is_dir() and not item.is_symlink():
+                  shutil.rmtree(item)
+              else:
+                  item.unlink()
+          for item in src.iterdir():
+              dest = root / item.name
+              if item.is_dir() and not item.is_symlink():
+                  shutil.copytree(item, dest, dirs_exist_ok=True)
+              else:
+                  shutil.copy2(item, dest)
+          print('repo root now:')
+          for item in sorted(root.iterdir()):
+              print(' ', item.name)
+          PYEOF
+
+      - name: Commit extracted package
+        env:
+          ATTACHMENT_FILE: ${{ inputs.attachment_file }}
+        run: |
+          rm -f "$ATTACHMENT_FILE"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git status --short | head -100
+          git commit -m "Deploy HRMS V3.3: extract updated code package (one-shot)" || echo "nothing to commit"
+          git push
