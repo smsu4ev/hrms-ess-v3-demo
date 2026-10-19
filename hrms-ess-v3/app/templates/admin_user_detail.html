@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}User {{ user.id }}{% endblock %}
+{% block content %}
+<h2>{{ user.name }} ({{ user.id }})</h2>
+<p class="muted">{{ user.designation }} - {{ user.department }}</p>
+
+<div class="twocol">
+<div class="formcard">
+<h3>Password</h3>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="reset_initial">
+  <p>Generate a random temporary password. The user must change it on next login.</p>
+  <button class="btn" type="submit">Generate Temporary Password</button>
+</form>
+<hr>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="set_password">
+  <label>Set specific password <input type="text" name="new_password" autocomplete="off"></label>
+  <label class="check"><input type="checkbox" name="force_change" checked> Force change on next login</label>
+  <button class="btn" type="submit">Set Password</button>
+</form>
+</div>
+
+<div class="formcard">
+<h3>Account</h3>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="toggle_active">
+  <p>Status: <strong>{{ 'Active' if user.is_active else 'Inactive' }}</strong></p>
+  <button class="btn {% if user.is_active %}danger{% endif %}" type="submit">
+    {{ 'Deactivate' if user.is_active else 'Activate' }}</button>
+</form>
+<hr>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="toggle_salary_view">
+  <p>Salary visibility: <strong>{{ 'Granted' if user.can_view_salary else 'Not granted' }}</strong>
+     (admins always have it)</p>
+  <button class="btn" type="submit">{{ 'Revoke' if user.can_view_salary else 'Grant' }} Salary Visibility</button>
+</form>
+<hr>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="toggle_hr_staff">
+  <p>HR Staff (can create employees via the approval matrix; acts on HR Staff approval steps):
+     <strong>{{ 'Yes' if user.is_hr_staff else 'No' }}</strong></p>
+  <button class="btn" type="submit">{{ 'Clear' if user.is_hr_staff else 'Set' }} HR Staff Flag</button>
+</form>
+<hr>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="toggle_hr_manager">
+  <p>HR Manager (approves employee creation and HR Manager approval steps):
+     <strong>{{ 'Yes' if user.is_hr_manager else 'No' }}</strong></p>
+  <button class="btn" type="submit">{{ 'Clear' if user.is_hr_manager else 'Set' }} HR Manager Flag</button>
+</form>
+<hr>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="set_role">
+  <label>Role
+    <select name="role">
+      {% for r in ['employee','manager','admin'] %}
+      <option value="{{ r }}" {% if user.role==r %}selected{% endif %}>{{ r|title }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button class="btn" type="submit">Update Role</button>
+</form>
+</div>
+</div>
+
+<h3>Leave Balances</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Type</th><th>Entitled</th><th>Used</th></tr>
+  {% for b in balances %}
+  <tr><td>{{ b.leave_type|title }}</td><td>{{ b.entitled }}</td><td>{{ b.used }}</td></tr>
+  {% else %}<tr><td colspan="3" class="muted">None.</td></tr>{% endfor %}
+</table></div>
+
+<h3>Recent Activity</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Time</th><th>Action</th><th>Detail</th><th>IP</th></tr>
+  {% for l in logs %}
+  <tr><td>{{ l.created_at.strftime('%Y-%m-%d %H:%M') }}</td><td>{{ l.action }}</td>
+      <td>{{ l.detail or '' }}</td><td>{{ l.ip or '' }}</td></tr>
+  {% else %}<tr><td colspan="4" class="muted">None.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}My Training{% endblock %}
+{% block content %}
+<h2>My Training</h2>
+<p class="muted">Assigned courses, study materials and quizzes.</p>
+{% for r in rows %}
+<div class="formcard">
+  <h3>{{ r.course.title }}</h3>
+  <p class="muted">{{ r.course.category }}{% if r.assign.due_date %} &middot; Due {{ r.assign.due_date }}{% endif %}</p>
+  {% if r.best %}
+  <p>Best score: <strong>{{ r.best.score_percent }}%</strong>
+    <span class="badge {{ 'approved' if r.best.passed else 'rejected' }}">{{ 'Passed' if r.best.passed else 'Not passed' }}</span></p>
+  {% else %}
+  <p><span class="badge pending">Not started</span></p>
+  {% endif %}
+  <a class="btn small primary" href="{{ url_for('engagement.training_course_page', cid=r.course.id) }}">Open course</a>
+</div>
+{% else %}
+<p class="muted">No training assigned to you yet.</p>
+{% endfor %}
+{% endblock %}

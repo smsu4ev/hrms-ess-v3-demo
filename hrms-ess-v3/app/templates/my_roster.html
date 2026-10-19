@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}My Roster{% endblock %}
+{% block content %}
+<h2>My Roster</h2>
+<p class="muted">Your shift assignments for the next 14 days.</p>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Date</th><th>Day</th><th>Shift</th><th>Timings</th></tr>
+  {% for r in rows %}
+  <tr{% if r.today %} class="today"{% endif %}>
+    <td>{{ r.date.strftime('%d %b %Y') }}{% if r.today %} <strong>(Today)</strong>{% endif %}</td>
+    <td>{{ r.date.strftime('%A') }}</td>
+    <td>{% if r.assignment %}<span class="chip{% if r.assignment.shift and r.assignment.shift.code == 'NIGHT' %} chip-night{% endif %}">{{ r.assignment.shift.code if r.assignment.shift else '?' }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td>{% if r.assignment and r.assignment.shift %}{{ r.assignment.shift.name }} ({{ r.assignment.shift.start_time }}–{{ r.assignment.shift.end_time }}){% else %}<span class="muted">—</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Visa Companies{% endblock %}
+{% block content %}
+<h2>Visa Companies</h2>
+<p class="muted">Each employee belongs to one visa company. One payroll run covers everyone at the
+same time; WPS files are generated <strong>split by visa company</strong>.</p>
+{% if current_user.is_admin %}
+<div class="formcard">
+<h3>Add Company</h3>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Code (e.g. ALA) <input type="text" name="code" required maxlength="20"></label>
+  <label>Legal Name <input type="text" name="name" required maxlength="120"></label>
+  <button class="btn primary" type="submit">Add Company</button>
+</form>
+</div>
+{% endif %}
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Code</th><th>Name</th><th>Active Staff</th><th>Status</th><th></th></tr>
+  {% for c in rows %}
+  <tr>
+    <td><strong>{{ c.code }}</strong></td><td>{{ c.name }}</td>
+    <td>{{ counts.get(c.id, 0) }}</td>
+    <td><span class="badge {{ 'approved' if c.is_active else 'rejected' }}">{{ 'Active' if c.is_active else 'Inactive' }}</span></td>
+    <td>
+      {% if current_user.is_admin %}
+      <form method="post" action="{{ url_for('payroll.company_toggle', cid=c.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn small" type="submit">{{ 'Deactivate' if c.is_active else 'Activate' }}</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

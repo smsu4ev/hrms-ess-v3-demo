@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ jd.title }}{% endblock %}
+{% block content %}
+<h2>{{ jd.title }} <span class="muted small">v{{ jd.version }}</span></h2>
+<p class="muted">
+  {% if jd.department %}Department: {{ jd.department }} &middot; {% endif %}
+  {% if jd.reports_to %}Reports to: {{ jd.reports_to }}{% endif %}
+</p>
+<div class="formcard jd-body">
+  {{ jd.body | e | replace('\n', '<br>') | safe }}
+</div>
+{% if jd.material_path %}
+<p><a class="btn small" href="{{ url_for('engagement.jd_material', jid=jd.id) }}">Download JD PDF</a></p>
+{% endif %}
+
+{% if ack.status == 'acknowledged' and ack.jd_version == jd.version %}
+<div class="formcard">
+  <p><span class="badge approved">Acknowledged on {{ ack.acknowledged_at.strftime('%d %b %Y %H:%M') if ack.acknowledged_at }}</span></p>
+  <p class="muted">Signed as: {{ ack.typed_name }}</p>
+  <img src="{{ url_for('engagement.jd_signature', aid=ack.id) }}" alt="Signature" style="max-width:300px;border:1px solid #ddd">
+</div>
+{% else %}
+{% if ack.status == 'acknowledged' %}
+<p><span class="badge pending">This JD was updated (v{{ ack.jd_version }} &rarr; v{{ jd.version }}). Please re-acknowledge.</span></p>
+{% endif %}
+<form method="post" id="jdAckForm" class="formcard" data-no-pjax="1">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h3>Acknowledge</h3>
+  <label>Draw your signature below
+    <canvas id="sigPad" style="width:100%;max-width:420px;height:160px;border:1px solid #999;border-radius:6px;touch-action:none;background:#fff"></canvas>
+  </label>
+  <button class="btn small" type="button" id="sigClear">Clear</button>
+  <label>Type your full name
+    <input type="text" name="typed_name" maxlength="120" required placeholder="Full name as in company records">
+  </label>
+  <label class="check"><input type="checkbox" name="agree" required> I have read and understood my Job Description.</label>
+  <input type="hidden" name="signature" id="sigData" value="">
+  <button class="btn primary" type="submit">Sign &amp; acknowledge</button>
+</form>
+<script src="{{ url_for('static', filename='jd_sign.js') }}"></script>
+{% endif %}
+<p><a href="{{ url_for('engagement.my_jd') }}">&larr; Back to my job descriptions</a></p>
+{% endblock %}

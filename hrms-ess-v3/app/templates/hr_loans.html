@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Loans & Advances{% endblock %}
+{% block content %}
+<h2>Loans &amp; Advances</h2>
+<p class="muted">Recoveries are applied automatically in payroll runs (capped at the outstanding
+balance). Balances reduce only when a run is <strong>locked</strong>, never on draft.</p>
+{% if current_user.is_admin %}
+<div class="formcard">
+<h3>Record Loan / Advance</h3>
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="add">
+  <label>Employee
+    <select name="user_id" required>
+      {% for e in employees %}<option value="{{ e.id }}">{{ e.name }} ({{ e.id }})</option>{% endfor %}
+    </select>
+  </label>
+  <label>Type <select name="loan_type"><option value="loan">Loan</option><option value="advance">Advance</option></select></label>
+  <label>Principal (AED) <input type="number" step="0.01" name="principal" required min="1"></label>
+  <label>Monthly Installment (AED) <input type="number" step="0.01" name="installment" required min="1"></label>
+  <label>Start Period (YYYY-MM) <input type="text" name="start_period" required pattern="\d{4}-\d{2}" placeholder="2026-10"></label>
+  <label>Note <input type="text" name="note" maxlength="200"></label>
+  <button class="btn primary" type="submit">Record</button>
+</form>
+</div>
+{% endif %}
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Employee</th><th>Type</th><th>Principal</th><th>Installment</th><th>Balance</th><th>From</th><th>Status</th><th></th></tr>
+  {% for l in rows %}
+  <tr>
+    <td>{{ users[l.user_id].name if l.user_id in users else l.user_id }} ({{ l.user_id }})</td>
+    <td>{{ l.loan_type|title }}</td>
+    <td class="r">{{ "%.2f"|format(l.principal) }}</td>
+    <td class="r">{{ "%.2f"|format(l.installment) }}</td>
+    <td class="r"><strong>{{ "%.2f"|format(l.balance) }}</strong></td>
+    <td>{{ l.start_period }}</td>
+    <td><span class="badge {{ 'approved' if l.status=='closed' else 'pending' }}">{{ l.status }}</span></td>
+    <td>
+      {% if current_user.is_admin and l.status in ['active','paused'] %}
+      <form method="post" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="{{ 'pause' if l.status=='active' else 'resume' }}">
+        <input type="hidden" name="loan_id" value="{{ l.id }}">
+        <button class="btn small" type="submit">{{ 'Pause' if l.status=='active' else 'Resume' }}</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="8" class="muted">No loans recorded.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

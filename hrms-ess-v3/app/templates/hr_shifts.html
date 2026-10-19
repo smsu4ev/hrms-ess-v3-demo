@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Shift Patterns{% endblock %}
+{% block content %}
+<h2>Shift Patterns</h2>
+<p class="muted">Define the working shifts used by the weekly roster. Night shifts cross midnight automatically.</p>
+
+{% if can_write %}
+<div class="formcard">
+  <h3>Add shift pattern</h3>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Code * <input type="text" name="code" required maxlength="20" placeholder="e.g. GEN"></label>
+    <label>Name * <input type="text" name="name" required maxlength="80" placeholder="e.g. General Shift"></label>
+    <label>Start (HH:MM) * <input type="time" name="start_time" required></label>
+    <label>End (HH:MM) * <input type="time" name="end_time" required></label>
+    <label>Break (minutes) <input type="number" name="break_minutes" value="60" min="0"></label>
+    <label>Grace (minutes) <input type="number" name="grace_minutes" value="10" min="0"></label>
+    <label style="display:inline-block"><input type="checkbox" name="is_outdoor"> Outdoor / site work (triggers midday-break warning in summer)</label>
+    <button class="btn primary" type="submit">Add Shift</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Code</th><th>Name</th><th>Start</th><th>End</th><th>Break</th><th>Grace</th><th>Overnight</th><th>Outdoor</th>{% if can_write %}<th>Actions</th>{% endif %}</tr>
+  {% for p in patterns %}
+  <tr>
+    <td><span class="chip{% if p.code == 'NIGHT' %} chip-night{% endif %}">{{ p.code }}</span></td>
+    <td>{{ p.name }}</td><td>{{ p.start_time }}</td><td>{{ p.end_time }}</td>
+    <td>{{ p.break_minutes }} min</td><td>{{ p.grace_minutes }} min</td>
+    <td>{% if p.crosses_midnight %}Yes{% else %}No{% endif %}</td>
+    <td>{% if p.is_outdoor %}<span class="chip chip-warn">Outdoor</span>{% else %}—{% endif %}</td>
+    {% if can_write %}
+    <td>
+      <form method="post" action="{{ url_for('roster.shift_delete', pid=p.id) }}" style="display:inline" onsubmit="return confirm('Delete this shift pattern?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn small danger" type="submit">Delete</button>
+      </form>
+    </td>
+    {% endif %}
+  </tr>
+  {% else %}
+  <tr><td colspan="9" class="muted">No shift patterns yet.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

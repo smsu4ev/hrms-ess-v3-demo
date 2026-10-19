@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Review Employee {{ user.id }}{% endblock %}
+{% block content %}
+<h2>Review Employee Creation — {{ user.name }} ({{ user.id }})</h2>
+<p class="muted">Created by {{ instance.requester_id }} on {{ instance.created_at.strftime('%Y-%m-%d %H:%M') }}.
+   Status: <strong>{{ instance.status|title }}</strong> &middot;
+   <span class="chip">{{ badge }}</span>
+   {% if user.pending_status %}&middot; Intended status on approval: <strong>{{ user.pending_status|title }}</strong>{% endif %}</p>
+
+<h3>Submitted Data</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>Employee ID</td><td>{{ user.id }}</td></tr>
+  <tr><td>Name</td><td>{{ user.name }}</td></tr>
+  <tr><td>Department</td><td>{{ user.department or '-' }}</td></tr>
+  <tr><td>Designation</td><td>{{ user.designation or '-' }}</td></tr>
+  <tr><td>Reporting Manager</td><td>{{ user.reporting_manager or '-' }}</td></tr>
+  <tr><td>Joining Date</td><td>{{ user.joining_date or '-' }}</td></tr>
+  <tr><td>Nationality</td><td>{{ user.nationality or '-' }}</td></tr>
+  <tr><td>Date of Birth</td><td>{{ user.date_of_birth or '-' }}</td></tr>
+  <tr><td>Email</td><td>{{ user.email or '-' }}</td></tr>
+  <tr><td>Mobile</td><td>{{ user.mobile or '-' }}</td></tr>
+  <tr><td>Phone</td><td>{{ user.phone or '-' }}</td></tr>
+  <tr><td>Passport No</td><td>{{ user.passport_no or '-' }}</td></tr>
+  <tr><td>Passport Expiry</td><td>{{ user.passport_expiry_date or '-' }}</td></tr>
+  <tr><td>Visa Expiry</td><td>{{ user.visa_expiry_date or '-' }}</td></tr>
+  <tr><td>Emirates ID No</td><td>{{ user.emirates_id_no or '-' }}</td></tr>
+  <tr><td>Emirates ID Expiry</td><td>{{ user.emirates_id_expiry_date or '-' }}</td></tr>
+</table></div>
+
+<h3>Approval History</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Step</th><th>Action</th><th>By</th><th>Comment</th><th>Time</th></tr>
+  {% for a in actions %}
+  <tr><td>{{ a.step_no }}</td>
+      <td>{{ a.action.replace('_', ' ')|title }}</td>
+      <td>{{ approver_names.get(a.actor_id, 'System') if a.actor_id else 'System (auto)' }}</td>
+      <td>{{ a.comment or '-' }}</td>
+      <td>{{ a.created_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
+  {% else %}<tr><td colspan="5" class="muted">No actions yet.</td></tr>{% endfor %}
+</table></div>
+
+{% if instance.status == 'pending' %}
+  {% if can_act %}
+  <h3>Your Decision</h3>
+  <form method="post" class="formcard">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Comment (optional)<input type="text" name="comment" maxlength="500"></label>
+    <div class="btnrow">
+      <button class="btn primary" type="submit" name="action" value="approve">Approve &amp; Activate</button>
+      <button class="btn danger" type="submit" name="action" value="reject">Reject</button>
+    </div>
+  </form>
+  {% else %}
+  <p class="muted">This request is awaiting another approver ({{ badge }}).</p>
+  {% endif %}
+{% endif %}
+{% endblock %}

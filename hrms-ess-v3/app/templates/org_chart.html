@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Org Chart{% endblock %}
+{% block content %}
+<h2>Organisation Chart</h2>
+<p class="muted">Read-only view of reporting lines.</p>
+
+{% macro render_node(n) %}
+<li class="org-node">
+  <strong>{{ n.user.name }}</strong>
+  <span class="muted small">— {{ n.user.designation or '-' }}, {{ n.user.department or '-' }} ({{ n.user.id }})</span>
+  {% if n.children %}
+  <ul>
+    {% for c in n.children %}{{ render_node(c) }}{% endfor %}
+  </ul>
+  {% endif %}
+</li>
+{% endmacro %}
+
+<ul class="org-tree">
+  {% for n in tree %}{{ render_node(n) }}{% endfor %}
+</ul>
+{% endblock %}

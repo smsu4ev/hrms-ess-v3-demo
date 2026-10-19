@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ course.title }}{% endblock %}
+{% block content %}
+<h2>{{ course.title }}</h2>
+<p class="muted">{{ course.category }} &middot; Pass mark {{ course.pass_percent }}%</p>
+{% if course.description %}<div class="formcard">{{ course.description | e | replace('\n', '<br>') | safe }}</div>{% endif %}
+
+<h3>Study material</h3>
+{% if course.material_kind == 'link' and course.material_url %}
+<p><a class="btn small" href="{{ course.material_url }}" target="_blank" rel="noopener">Open material (external link)</a></p>
+{% elif course.material_kind == 'file' %}
+<p><a class="btn small" href="{{ url_for('engagement.training_material', cid=course.id) }}">Download / view material</a></p>
+{% else %}
+<p class="muted">No material attached to this course.</p>
+{% endif %}
+
+<h3>Quiz ({{ n_questions }} questions)</h3>
+{% if best %}
+<p>Best score: <strong>{{ best.score_percent }}%</strong>
+  <span class="badge {{ 'approved' if best.passed else 'rejected' }}">{{ 'Passed' if best.passed else 'Not passed' }}</span></p>
+{% endif %}
+{% if n_questions %}
+<a class="btn primary" href="{{ url_for('engagement.training_quiz', cid=course.id) }}">{% if best %}Retake quiz{% else %}Take quiz{% endif %}</a>
+{% else %}
+<p class="muted">Quiz questions are being prepared — check back later.</p>
+{% endif %}
+<p><a href="{{ url_for('engagement.my_training') }}">&larr; Back to my training</a></p>
+{% endblock %}

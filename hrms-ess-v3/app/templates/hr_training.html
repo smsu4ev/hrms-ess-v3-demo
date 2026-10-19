@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Training Courses{% endblock %}
+{% block content %}
+<h2>Training Courses</h2>
+<div class="formcard">
+  <h3>New course</h3>
+  <form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="create">
+    <label>Title <input type="text" name="title" maxlength="160" required></label>
+    <label>Category
+      <select name="category">
+        {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Description <textarea name="description" rows="3"></textarea></label>
+    <label>Material file (PDF/PNG/JPG/MP4, max 25 MB) <input type="file" name="material_file" accept=".pdf,.png,.jpg,.jpeg,.mp4"></label>
+    <label>…or material link <input type="url" name="material_url" maxlength="400" placeholder="https://"></label>
+    <label>Pass mark % <input type="number" name="pass_percent" value="70" min="0" max="100"></label>
+    <label>Certification issued on pass (optional) <input type="text" name="issue_cert_name" maxlength="120" placeholder="e.g. HSE Safety Induction"></label>
+    <label>Certification validity (months) <input type="number" name="cert_valid_months" min="1" max="120"></label>
+    <button class="btn primary" type="submit">Create course</button>
+  </form>
+</div>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Title</th><th>Category</th><th>Material</th><th>Pass %</th><th>Active</th><th></th></tr>
+  {% for c in courses %}
+  <tr>
+    <td><a href="{{ url_for('engagement.hr_training_detail', cid=c.id) }}">{{ c.title }}</a></td>
+    <td>{{ c.category }}</td>
+    <td>{{ c.material_kind }}</td>
+    <td>{{ c.pass_percent }}</td>
+    <td>{{ 'Yes' if c.is_active else 'No' }}</td>
+    <td>
+      <form method="post" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="id" value="{{ c.id }}">
+        <button class="btn small danger" type="submit" onclick="return confirm('Delete this course and all its data?')">Delete</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% endblock %}

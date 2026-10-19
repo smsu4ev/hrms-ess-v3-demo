@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}My Profile{% endblock %}
+{% block content %}
+<h2>My Profile</h2>
+<div class="formcard">
+  {% if current_user.photo_path %}
+  <img src="{{ url_for('docs.photo', uid=current_user.id) }}" alt="Profile photo"
+       style="height:120px;width:120px;object-fit:cover;border-radius:8px">
+  {% else %}
+  <p class="muted">No photo uploaded.</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('docs.profile_photo') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Update photo (JPG/PNG, max 2 MB) <input type="file" name="photo" accept=".jpg,.jpeg,.png" required></label>
+    <button class="btn small primary" type="submit">Upload Photo</button>
+  </form>
+</div>
+<div class="tbl-wrap">
+<table class="tbl profile">
+  <tr><th>Employee ID</th><td>{{ current_user.id }}</td></tr>
+  <tr><th>Name</th><td>{{ current_user.name }}</td></tr>
+  <tr><th>Designation</th><td>{{ current_user.designation or '-' }}</td></tr>
+  <tr><th>Department</th><td>{{ current_user.department or '-' }}</td></tr>
+  <tr><th>Official Email</th><td>{{ current_user.email or '-' }}</td></tr>
+  <tr><th>Mobile</th><td>{{ current_user.mobile or '-' }}</td></tr>
+  <tr><th>Role</th><td>{{ current_user.role|title }}</td></tr>
+  <tr><th>Status</th><td>{{ 'Active' if current_user.is_active else 'Inactive' }}</td></tr>
+</table>
+</div>
+<p class="muted">To update personal details, please contact HR.</p>
+
+<div class="formcard">
+  <h3>Celebration Feed Preference</h3>
+  <form method="post" action="{{ url_for('views.profile_celebrations') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label><input type="checkbox" name="share_celebrations" value="on"
+      {% if current_user.share_celebrations %}checked{% endif %}>
+      Share my birthday and work anniversary on the company feed</label>
+    <button class="btn small primary" type="submit">Save Preference</button>
+  </form>
+  <p class="muted">If unticked, no birthday or anniversary post is created for you (you still receive notifications and can wish others).</p>
+</div>
+
+{% if my_deps %}
+<h3>My Current Deployment</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Project</th><th>From</th><th>To</th><th>Site Allowance (AED)</th></tr>
+  {% for d in my_deps %}
+  <tr><td>{{ dep_projects[d.project_id].name if d.project_id in dep_projects else '-' }}</td>
+      <td>{{ d.from_date or '-' }}</td><td>{{ d.to_date or '-' }}</td>
+      <td>{{ "%.2f"|format(d.site_allowance or 0) }}</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+
+{% if my_certs %}
+<h3>My Certifications</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Certification</th><th>Issuer</th><th>Issued</th><th>Expires</th></tr>
+  {% for c in my_certs %}
+  <tr><td>{{ c.name }}</td><td>{{ c.issuer or '-' }}</td><td>{{ c.issue_date or '-' }}</td><td>{{ c.expiry_date or '-' }}</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+
+{% if my_ppe %}
+<h3>My PPE &amp; Uniform</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Item</th><th>Size</th><th>Qty</th><th>Issued</th><th>Returned</th></tr>
+  {% for i in my_ppe %}
+  <tr><td>{{ i.item }}</td><td>{{ i.size or '-' }}</td><td>{{ i.qty }}</td><td>{{ i.issued_date or '-' }}</td><td>{{ i.returned_date or '—' }}</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+
+{% if my_assets %}
+<h3>My Assets &amp; Tools in Custody</h3>
+<div class="tbl-wrap">
+<table class="tbl">
+  <tr><th>Item</th><th>Category</th><th>Serial No</th><th>Issued</th><th>Returned</th><th>Status</th></tr>
+  {% for a in my_assets %}
+  <tr><td>{{ a.item_name }}</td><td>{{ a.category }}</td><td>{{ a.serial_no or '-' }}</td><td>{{ a.issued_date or '-' }}</td><td>{{ a.returned_date or '—' }}</td><td>{{ a.status }}</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+
+{% if gratuity_est %}
+<div class="formcard">
+  <h3>My End-of-Service Estimate</h3>
+  <p class="muted">Estimate only, based on your basic salary of AED {{ current_user.basic_salary }} and
+     {{ gratuity_est.years_of_service }} years of service (employer-termination basis).
+     The final settlement is calculated by HR under Federal Decree-Law 33/2021.</p>
+  <div class="cards">
+    <div class="card"><div class="num">AED {{ "%.2f"|format(gratuity_est.amount) }}</div><div class="lbl">Estimated gratuity</div></div>
+    <div class="card"><div class="num">{{ gratuity_est.accrual_days }}</div><div class="lbl">Accrued days</div></div>
+  </div>
+  <p><a class="btn small" href="{{ url_for('views.my_gratuity') }}">View full breakdown</a></p>
+</div>
+{% endif %}
+{% endblock %}

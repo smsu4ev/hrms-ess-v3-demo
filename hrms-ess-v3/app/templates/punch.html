@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Check In / Out{% endblock %}
+{% block content %}
+<h2>Check In / Check Out</h2>
+<p class="muted">{{ today.strftime('%A, %d %B %Y') }} — works on your phone's browser with GPS and camera. <strong>HTTPS or localhost is required</strong> for location and camera access.</p>
+
+{% if record %}
+<div class="formcard">
+  <h3>Today's attendance</h3>
+  <p>Status: <span class="badge {{ record.status }}">{{ record.status }}</span></p>
+  <p>Check-in: <strong>{{ record.check_in or '-' }}</strong> &nbsp; Check-out: <strong>{{ record.check_out or '-' }}</strong></p>
+</div>
+{% endif %}
+
+{% if disabled_msg %}
+<div class="infobanner">{{ disabled_msg }}</div>
+{% else %}
+<input type="hidden" id="punchCsrf" value="{{ csrf_token() }}">
+<div class="twocol">
+  <div class="formcard punch-card">
+    <h3>Check In</h3>
+    <p class="muted">Start of your workday. Requires GPS + a selfie.</p>
+    <button class="btn primary big" id="btnPunchIn" type="button">Check In</button>
+  </div>
+  <div class="formcard punch-card">
+    <h3>Check Out</h3>
+    <p class="muted">End of your workday. Requires GPS + a selfie.</p>
+    <button class="btn big" id="btnPunchOut" type="button">Check Out</button>
+  </div>
+</div>
+<p class="muted" id="punchLoc">Getting your location…</p>
+<button class="btn primary big" id="btnSelfie" type="button" style="display:none">Take Selfie</button>
+<div id="punchStatus" class="punch-status" role="status" aria-live="polite"></div>
+
+{% if locations %}
+<h3>Work locations</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Location</th><th>Radius</th></tr>
+  {% for l in locations %}
+  <tr><td>{{ l.name }}</td><td>{{ l.radius_m }} m</td></tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="muted">No work locations are configured yet — ask HR to set them up. Until then, punches are accepted as <strong>Unrestricted</strong>.</p>
+{% endif %}
+
+<p class="muted">If your phone cannot share location or open the camera, use <a href="{{ url_for('views.regularisation') }}">Attendance Regularisation</a> instead.</p>
+<script src="{{ url_for('static', filename='punch.js') }}?v=2"></script>
+{% endif %}
+{% endblock %}

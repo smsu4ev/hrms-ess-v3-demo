@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% from "_frappe_pills.html" import status_pill %}
+{% block title %}Settlement #{{ st.id }}{% endblock %}
+{% block content %}
+{% include "_frappe_css.html" %}
+<p class="crumbs"><a href="{{ url_for('views.dashboard') }}">Tenure</a><span class="sep">/</span><a href="{{ url_for('settlement.settlements') }}">Final Settlements</a><span class="sep">/</span>#{{ st.id }}</p>
+<div class="frappe-head">
+  <div>
+    <h2>Final Settlement #{{ st.id }}</h2>
+    <p style="margin:6px 0 0">{{ status_pill(st.status) }}
+      {% if st.is_overdue %}<span class="pill pill-red">Overdue</span>{% endif %}
+      {% if st.status in ('calculated','approved','disbursed','paid') and st.net < 0 %}<span class="pill pill-amber">Recovery required</span>{% endif %}
+      <span class="muted" style="margin-left:8px"><strong>{{ u.name if u else st.user_id }}</strong> ({{ st.user_id }}) &middot; {{ st.separation_type }} &middot; Last working day {{ st.last_working_day.isoformat() if st.last_working_day else '—' }}</span></p>
+  </div>
+  <div class="list-actions">
+    <button class="btn small" data-print>Print Statement</button>
+    <a class="btn small" href="{{ url_for('settlement.settlements') }}">Back to settlements</a>
+  </div>
+</div>
+<span class="view-label">Form View</span>
+<p class="muted">{% if st.payment_due_date %}Payable by <strong>{{ st.payment_due_date.isoformat() }}</strong> (14 days from last working day — Art. 53){% endif %}
+   {% if st.disbursed_at %}&middot; Disbursed {{ st.disbursed_at.strftime('%Y-%m-%d') }} (ref: {{ st.payment_ref or '—' }}){% endif %}</p>
+{% if st.reason %}<p class="muted">Reason: {{ st.reason }}</p>{% endif %}
+
+<div class="detail-grid">
+  <div>
+    {% if st.status in ('calculated','approved','disbursed','paid') %}
+    <div class="stmt">
+      <div class="stmt-head">
+        <h3>{{ company_name }}</h3>
+        <p><strong>Full &amp; Final Settlement Statement</strong><br>
+           Employee: <strong>{{ u.name if u else st.user_id }} ({{ st.user_id }})</strong><br>
+           Designation: {{ u.designation if u else '' }} &middot; Department: {{ u.department if u else '' }}<br>
+           Last Working Day: {{ st.last_working_day.isoformat() if st.last_working_day else '' }} &middot;
+           Separation: {{ st.separation_type }} &middot; Status: {{ st.status|upper }}<br>
+           Payable by: <strong>{{ st.payment_due_date.isoformat() if st.payment_due_date else '' }}</strong>
+           (Art. 53 — within 14 days of contract end)
+           {% if st.is_overdue %}&middot; <strong style="color:#dc2626">OVERDUE</strong>{% endif %}
+           {% if st.net < 0 %}&middot; <strong style="color:#dc2626">Recovery required</strong>{% endif %}</p>
+      </div>
+      <table class="tbl">
+        <tr><th>#</th><th>Particulars</th><th>Payable (AED)</th><th>Recoverable (AED)</th></tr>
+        {% for l in st.lines %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ l.label }}{% if l.note %}<br><span class="muted">{{ l.note }}</span>{% endif %}</td>
+          <td style="text-align:right">{% if l.kind == 'payable' %}{{ '%.2f'|format(l.amount) }}{% endif %}</td>
+          <td style="text-align:right">{% if l.kind == 'recoverable' %}{{ '%.2f'|format(l.amount) }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+        <tr><td colspan="2" style="text-align:right"><strong>Total</strong></td>
+            <td style="text-align:right"><strong>{{ '%.2f'|format(st.total_payable) }}</strong></td>
+            <td style="text-align:right"><strong>{{ '%.2f'|format(st.total_recoverable) }}</strong></td></tr>
+        <tr><td colspan="2" style="text-align:right"><strong>{% if st.net >= 0 %}Net Payable{% else %}Net Recoverable from Employee{% endif %}</strong></td>
+            <td colspan="2" style="text-align:right"><strong>{{ '%.2f'|format(st.net|abs) }}</strong></td></tr>
+      </table>
+      <p class="muted">Prepared by: {{ st.created_by or '' }}
+         {% if st.approved_by %}&middot; Approved by: {{ st.approved_by }} on {{ st.approved_at.strftime('%Y-%m-%d') if st.approved_at else '' }}{% endif %}
+         {% if st.disbursed_at %}&middot; Disbursed on {{ st.disbursed_at.strftime('%Y-%m-%d') }} (ref {{ st.payment_ref or '—' }}){% endif %}
+         {% if st.paid_at %}&middot; Paid on {{ st.paid_at.strftime('%Y-%m-%d') }}{% endif %}</p>
+      <p style="margin-top:30px">Employee Signature: ____________________&nbsp;&nbsp;&nbsp;HR Manager: ____________________</p>
+    </div>
+    {% endif %}
+
+    {% if st.status == 'draft' %}
+    <div class="formcard">
+      <h3>Manual adjustments</h3>
+      <form method="post" action="{{ url_for('settlement.add_adjustment', sid=st.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label>Label * <input type="text" name="label" required maxlength="160" placeholder="e.g. Air ticket recovery"></label>
+        <label>Kind *
+          <select name="kind"><option value="payable">Payable</option><option value="recoverable">Recoverable</option></select>
+        </label>
+        <label>Amount (AED) * <input type="number" step="0.01" min="0" name="amount" required></label>
+        <label>Note <input type="text" name="note" maxlength="300"></label>
+        <button class="btn primary" type="submit">Add Adjustment</button>
+      </form>
+      {% if manual %}
+      <div class="tbl-wrap"><table class="tbl">
+        <tr><th>Label</th><th>Kind</th><th>Amount</th><th></th></tr>
+        {% for m in manual %}
+        <tr><td>{{ m.label }}</td><td>{{ m.kind }}</td><td>{{ '%.2f'|format(m.amount) }}</td>
+          <td><form method="post" action="{{ url_for('settlement.delete_adjustment', sid=st.id, lid=m.id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn small danger" type="submit">Remove</button></form></td></tr>
+        {% endfor %}
+      </table></div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if assets_pending or ppe_pending or leave_pending %}
+    <div class="banner warn-banner">
+      <strong>Clearance warnings:</strong>
+      {% if assets_pending %}{{ assets_pending|length }} unreturned asset(s){% if assets_pending or ppe_pending or leave_pending %}; {% endif %}{% endif %}
+      {% if ppe_pending %}{{ ppe_pending|length }} unreturned PPE/uniform item(s){% if leave_pending %}; {% endif %}{% endif %}
+      {% if leave_pending %}{{ leave_pending }} pending leave request(s){% endif %}
+      — resolve before marking paid.
+    </div>
+    {% endif %}
+
+    <div class="formcard">
+      <h3>Actions</h3>
+      {% if st.status == 'draft' %}
+      <form method="post" action="{{ url_for('settlement.calculate', sid=st.id) }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn primary" type="submit">Calculate (freeze lines)</button>
+      </form>
+      {% elif st.status == 'calculated' %}
+      <form method="post" action="{{ url_for('settlement.reopen', sid=st.id) }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn" type="submit">Reopen to Draft</button>
+      </form>
+      <form method="post" action="{{ url_for('settlement.approve', sid=st.id) }}" style="display:inline" data-confirm="Approve this settlement?">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn primary" type="submit">Approve</button>
+      </form>
+      <p class="muted">Note: the settlement creator cannot approve their own settlement (segregation of duties).</p>
+      {% elif st.status == 'approved' %}
+      <div class="formcard">
+        <h3>Mark Disbursed — payment proof (gate 1)</h3>
+        <p class="muted">Disbursement records the actual payout. The Art. 53 overdue clock stops here.
+           The signed MOHRE cancellation / EOS receipt still gates final closure.</p>
+        <form method="post" action="{{ url_for('settlement.mark_disbursed', sid=st.id) }}" enctype="multipart/form-data" data-confirm="Mark this settlement as disbursed?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label>Payment reference (e.g. bank transfer / WPS batch ref) * <input type="text" name="payment_ref" maxlength="80" required placeholder="e.g. TT-2026-1184"></label>
+          <label>Payment proof (PDF, JPG or PNG — bank transfer advice, WPS confirmation, cheque copy) * <input type="file" name="payment_proof" accept=".pdf,.jpg,.jpeg,.png" required></label>
+          <button class="btn primary" type="submit">Mark Disbursed</button>
+        </form>
+      </div>
+      {% elif st.status == 'disbursed' %}
+      <div class="formcard">
+        <h3>Payment proof</h3>
+        <p>Reference: <strong>{{ st.payment_ref or '—' }}</strong> &middot;
+           Disbursed: {{ st.disbursed_at.strftime('%Y-%m-%d') if st.disbursed_at else '—' }}</p>
+        {% if st.payment_doc_path %}
+        <p><a class="btn" href="{{ url_for('settlement.view_payment', sid=st.id) }}" target="_blank">View payment proof</a></p>
+        {% endif %}
+      </div>
+      <div class="formcard">
+        <h3>Signed cancellation receipt (required before Mark Paid)</h3>
+        {% if st.cancellation_doc_path %}
+        <p><a class="btn" href="{{ url_for('settlement.view_receipt', sid=st.id) }}" target="_blank">View uploaded receipt</a></p>
+        {% endif %}
+        <form method="post" action="{{ url_for('settlement.upload_receipt', sid=st.id) }}" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label>MOHRE cancellation / EOS receipt (PDF, JPG or PNG) <input type="file" name="receipt" accept=".pdf,.jpg,.jpeg,.png" {% if not st.cancellation_doc_path %}required{% endif %}></label>
+          <button class="btn" type="submit">Upload Receipt</button>
+        </form>
+        {% if not st.cancellation_doc_path %}<p class="muted">Mark Paid is blocked until a signed receipt is uploaded.</p>{% endif %}
+      </div>
+      <form method="post" action="{{ url_for('settlement.mark_paid', sid=st.id) }}" style="display:inline" data-confirm="Mark this settlement as paid?">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn primary" type="submit">Mark Paid</button>
+      </form>
+      {% else %}
+      <p class="muted">Settlement is paid. No further actions.</p>
+      {% endif %}
+    </div>
+
+    <div class="formcard">
+      <h3>Activity Timeline</h3>
+      {% set timeline_logs = logs %}
+      {% include "_frappe_timeline.html" %}
+    </div>
+  </div>
+  <aside class="infopanel">
+    <h4>Settlement #{{ st.id }}</h4>
+    <div>{{ status_pill(st.status) }}</div>
+    <dl>
+      <dt>Employee</dt><dd>{{ u.name if u else st.user_id }} ({{ st.user_id }})</dd>
+      <dt>Separation</dt><dd>{{ st.separation_type }}</dd>
+      <dt>Last working day</dt><dd>{{ st.last_working_day.isoformat() if st.last_working_day else '-' }}</dd>
+      <dt>Payable by</dt><dd>{{ st.payment_due_date.isoformat() if st.payment_due_date else '-' }}</dd>
+      <dt>Created by</dt><dd>{{ st.created_by or '-' }}</dd>
+      <dt>Created</dt><dd>{{ st.created_at.strftime('%d %b %Y') if st.created_at else '-' }}</dd>
+      <dt>Last edited</dt>
+      <dd>{% if logs %}{{ logs[0].created_at.strftime('%d %b %Y %H:%M') }} by {{ logs[0].actor_id or 'system' }}{% else %}<span class="muted">No changes recorded</span>{% endif %}</dd>
+      <dt>Attachments</dt>
+      <dd>
+        {% if st.payment_doc_path %}<a href="{{ url_for('settlement.view_payment', sid=st.id) }}" target="_blank">Payment proof</a><br>{% endif %}
+        {% if st.cancellation_doc_path %}<a href="{{ url_for('settlement.view_receipt', sid=st.id) }}" target="_blank">Cancellation receipt</a>{% endif %}
+        {% if not st.payment_doc_path and not st.cancellation_doc_path %}<span class="muted">None yet</span>{% endif %}
+      </dd>
+    </dl>
+  </aside>
+</div>
+<script src="{{ url_for('static', filename='forms.js') }}"></script>
+{% endblock %}

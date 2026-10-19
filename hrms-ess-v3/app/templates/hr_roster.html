@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Weekly Roster{% endblock %}
+{% block content %}
+<h2>Weekly Roster</h2>
+<p class="muted">Week of {{ week.isoformat() }} &middot;
+  <a href="{{ url_for('roster.roster', week=prev_week.isoformat(), dept=dept) }}">&larr; Prev</a> |
+  <a href="{{ url_for('roster.roster', week=next_week.isoformat(), dept=dept) }}">Next &rarr;</a> |
+  <a href="{{ url_for('roster.roster_variance', date=days[0].isoformat()) }}">Roster vs Attendance</a>
+  {% if can_write %} | <a href="{{ url_for('roster.roster_settings') }}">Settings</a>{% endif %}
+</p>
+
+{% for b in banners %}
+<div class="banner">{{ b }}</div>
+{% endfor %}
+
+<form method="get" action="{{ url_for('roster.roster') }}" class="formcard" style="padding:10px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label style="display:inline-block;margin-right:10px">Week of <input type="date" name="week" value="{{ week.isoformat() }}"></label>
+  <label style="display:inline-block;margin-right:10px">Department
+    <select name="dept">
+      <option value="">All</option>
+      {% for d in depts %}<option value="{{ d }}" {% if dept==d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+    </select>
+  </label>
+  <button class="btn" type="submit">Show</button>
+</form>
+
+{% if can_write %}
+<div class="formcard">
+  <h3>Bulk assign</h3>
+  <form method="post" action="{{ url_for('roster.roster_bulk') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Apply to
+      <select name="scope">
+        <option value="all">All active employees</option>
+        <optgroup label="Departments">
+          {% for d in depts %}<option value="dept:{{ d }}">{{ d }}</option>{% endfor %}
+        </optgroup>
+        <optgroup label="Employees">
+          {% for u in all_users %}<option value="user:{{ u.id }}">{{ u.name }} ({{ u.id }})</option>{% endfor %}
+        </optgroup>
+      </select>
+    </label>
+    <label>Shift
+      <select name="shift" required>
+        {% for p in patterns %}<option value="{{ p.code }}">{{ p.code }} — {{ p.name }} ({{ p.start_time }}–{{ p.end_time }})</option>{% endfor %}
+      </select>
+    </label>
+    <label>From <input type="date" name="from_date" required value="{{ week.isoformat() }}"></label>
+    <label>To <input type="date" name="to_date" required value="{{ days[-1].isoformat() }}"></label>
+    <label>Skip weekly off
+      <select name="skip_off">
+        <option value="none">None</option>
+        <option value="friday">Friday</option>
+        <option value="sunday">Sunday</option>
+      </select>
+    </label>
+    <label style="display:inline-block"><input type="checkbox" name="overwrite"> Overwrite existing assignments</label>
+    <button class="btn primary" type="submit">Assign</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="tbl-wrap">
+<table class="tbl roster-grid">
+  <tr><th>Employee</th>
+    {% for d in days %}<th>{{ d.strftime('%a') }}<br><span class="muted">{{ d.strftime('%d %b') }}</span></th>{% endfor %}
+  </tr>
+  {% for r in rows %}
+  <tr>
+    <td style="white-space:nowrap"><strong>{{ r.user.name }}</strong>{% if r.no_rest %} <span class="chip chip-warn">No weekly rest</span>{% endif %}<br><span class="muted">{{ r.user.id }} &middot; {{ r.user.department or '' }}</span></td>
+    {% for c in r.cells %}
+    <td class="roster-cell">
+      {% if c.assignment %}
+        <span class="chip{% if c.assignment.shift and c.assignment.shift.code == 'NIGHT' %} chip-night{% endif %}">{{ c.assignment.shift.code if c.assignment.shift else '?' }}</span>
+      {% else %}<span class="muted">—</span>{% endif %}
+      {% if can_write %}
+      <br><a class="tiny" href="{{ url_for('roster.roster_assign', user=r.user.id, date=c.date.isoformat()) }}">{{ 'edit' if c.assignment else 'set' }}</a>
+      {% endif %}
+    </td>
+    {% endfor %}
+  </tr>
+  {% else %}
+  <tr><td colspan="8" class="muted">No employees to show.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

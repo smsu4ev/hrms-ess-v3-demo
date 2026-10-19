@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ ws.title }} - HRMS{% endblock %}
+{% block content %}
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="{{ url_for('views.dashboard') }}">Home</a>
+  <span class="crumb-sep">/</span>
+  <span>{{ ws.title }}</span>
+</nav>
+<div class="card hero-card ws-header-card">
+  <div class="hero-row">
+    <div class="hero-main">
+      <span class="t-chip indigo">{{ icon(ws.icon) }}</span>
+      <div>
+        <h2 style="margin:0">{{ greeting }}</h2>
+        <p class="muted" style="margin:4px 0 0">{{ ws.title }} &mdash; {{ subtitle }}</p>
+      </div>
+    </div>
+    <div class="hero-action">
+      <a class="btn small" href="{{ url_for('desk.apps') }}">All Services</a>
+    </div>
+  </div>
+</div>
+
+{% if checklist.total %}
+<div class="card" style="margin-top:16px">
+  <h3 style="margin-top:0">{{ checklist.title }}
+    <span class="muted" style="font-weight:400;font-size:14px">&middot; {{ checklist.done_count }} of {{ checklist.total }} steps</span>
+  </h3>
+  <div class="progress" style="margin:10px 0 6px"><div class="bar" style="width:{{ (100 * checklist.done_count / checklist.total)|round|int }}%"></div></div>
+  <ul style="list-style:none;margin:10px 0 0;padding:0">
+    {% for s in checklist.steps %}
+    <li style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      {% if s.done %}
+      <span style="color:var(--success)">{{ icon('check') }}</span>
+      {% else %}
+      <span class="muted">{{ icon('clock') }}</span>
+      {% endif %}
+      <a href="{{ s.href }}" style="flex:1">{{ s.label }}</a>
+      {% if s.done is true %}<span class="badge done">Done</span>
+      {% elif s.done is false %}<span class="badge pending">To do</span>
+      {% else %}<span class="badge">Guide</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="cards" style="margin-top:16px">
+  {% for n in numbers %}
+  <a class="card" href="{{ n.href }}" style="text-decoration:none;color:inherit">
+    <div style="display:flex;align-items:center;gap:8px;color:var(--muted)">{{ icon(n.icon) }}</div>
+    <div class="num">{{ n.value }}</div>
+    <div class="lbl">{{ n.label }}</div>
+  </a>
+  {% endfor %}
+</div>
+
+{% if chart and chart.bars %}
+<div class="card" style="margin-top:16px">
+  <h3 style="margin-top:0">{{ chart.title }}</h3>
+  <svg viewBox="0 0 600 {{ 34 * chart.bars|length + 10 }}" width="100%" role="img" aria-label="{{ chart.title }}">
+    {% for b in chart.bars %}
+    {% set y = loop.index0 * 34 + 6 %}
+    <text x="4" y="{{ y + 15 }}" font-size="13" fill="var(--muted)">{{ b.label }}</text>
+    <rect x="170" y="{{ y }}" width="{{ (b.pct * 3.6)|round|int }}" height="20" rx="4" fill="var(--primary, #4f46e5)"/>
+    <text x="{{ 178 + (b.pct * 3.6)|round|int }}" y="{{ y + 15 }}" font-size="13" font-weight="700">{{ b.value }}</text>
+    {% endfor %}
+  </svg>
+</div>
+{% endif %}
+
+{% for grp in nav %}
+<h3 style="margin:26px 0 4px">{{ grp.name }}</h3>
+<div class="cards">
+  {% for link in grp.links %}
+  <a class="card" href="{{ link.href }}" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:12px">
+    <span style="color:var(--muted)">{{ icon(link.icon) }}</span>
+    <span style="font-weight:600;flex:1">{{ link.label }}</span>
+    {% if link.endpoint in link_counts %}<span class="badge pending">{{ link_counts[link.endpoint] }}</span>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% endfor %}
+{% endblock %}

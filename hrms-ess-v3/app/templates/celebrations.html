@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Celebrations{% endblock %}
+{% block content %}
+<h2>Celebrations</h2>
+<p class="muted">Birthdays and work anniversaries from the last 7 days. Send wishes and reactions!</p>
+{% for p in posts %}
+{% set u = users.get(p.user_id) %}
+{% set wr = wish_rows.get(p.id, {}) %}
+<div class="formcard celeb-card">
+  <div class="celeb-head">
+    <strong>{{ u.name if u else p.user_id }}</strong>
+    <span class="badge {{ p.kind }}">{{ 'Birthday' if p.kind == 'birthday' else (p.years|string) + ' year' + ('s' if p.years != 1 else '') + ' anniversary' }}</span>
+    <span class="muted small">{{ p.post_date.strftime('%d %b %Y') }}</span>
+  </div>
+  <div class="reactions">
+    {% for r in reactions %}
+    <form method="post" style="display:inline" title="React {{ r }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="post_id" value="{{ p.id }}">
+      <input type="hidden" name="reaction" value="{{ r }}">
+      <button class="react-btn {% if wr.mine and wr.mine.reaction == r %}mine{% endif %}" type="submit">{{ r }} <span class="count">{{ wr.counts.get(r, 0) }}</span></button>
+    </form>
+    {% endfor %}
+  </div>
+  {% for m in wr.messages %}
+  <div class="wish-msg"><strong>{{ m.user.name if m.user else '—' }}:</strong> {{ m.message | e }} <span class="muted small">{{ m.at.strftime('%d %b %H:%M') }}</span></div>
+  {% else %}
+  <p class="muted small">No written wishes yet — be the first!</p>
+  {% endfor %}
+  {% if p.user_id != current_user.id %}
+  <form method="post" class="wish-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="post_id" value="{{ p.id }}">
+    <input type="text" name="message" maxlength="200" placeholder="Write a wish (max 200 characters)">
+    <button class="btn small primary" type="submit">Send wish</button>
+  </form>
+  {% endif %}
+</div>
+{% else %}
+<p class="muted">No celebrations in the last 7 days.</p>
+{% endfor %}
+{% endblock %}

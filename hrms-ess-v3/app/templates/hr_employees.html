@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_frappe_pills.html" import status_pill %}
+{% block title %}Employee Central{% endblock %}
+{% block content %}
+{% include "_frappe_css.html" %}
+{% set title = "Employee Central" %}
+{% set desc = "All employee records: profile, documents, attendance, salary and separation. Sorted by name." %}
+{% set add_url = url_for('hrms.employee_new') %}
+{% set add_label = "+ Add Employee" %}
+{% set crumb = '<a href="' + url_for('views.dashboard') + '">HR Setup</a><span class="sep">/</span>Employee Central' %}
+{% include "_frappe_list_header.html" %}
+<div class="filter-row">
+  <form method="get" action="{{ url_for('hrms.employees') }}" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+    <label>Search <input type="text" name="q" value="{{ q }}" placeholder="ID, name, designation"></label>
+    <label>Department
+      <select name="dept">
+        <option value="">All</option>
+        {% for d in departments %}
+        <option value="{{ d }}" {% if d == dept %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Status
+      <select name="status">
+        <option value="">All</option>
+        {% for s in statuses %}
+        <option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s.replace('_', ' ')|title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <span class="fbtns">
+      <button class="btn small primary" type="submit">Filter</button>
+      <a class="btn small" href="{{ url_for('hrms.employees') }}">Clear</a>
+    </span>
+  </form>
+</div>
+
+{% if rows %}
+{% if current_user.is_admin %}
+<form method="post" action="{{ url_for('hrms.employees_export') }}" data-bulk>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="list-actions" style="margin-bottom:8px">
+    <button class="btn-dark small" type="submit" data-bulk-btn disabled>Export selected (CSV)</button>
+    <span class="muted" style="font-size:12px">Admin only &middot; tick rows, or select all</span>
+  </div>
+{% endif %}
+<div class="tbl-wrap"><table class="tbl frappe-table">
+  <tr>
+    {% if current_user.is_admin %}<th><input type="checkbox" data-bulk-all aria-label="Select all"></th>{% endif %}
+    <th></th><th>ID</th><th>Name</th><th>Designation</th><th>Department</th><th>Manager</th><th>Status</th><th>Visa Expiry</th><th>Passport Expiry</th>
+  </tr>
+  {% for u in rows %}
+  <tr>
+    {% if current_user.is_admin %}<td><input type="checkbox" name="uid" value="{{ u.id }}" data-bulk-row aria-label="Select {{ u.id }}"></td>{% endif %}
+    <td>{% if u.photo_path %}<img src="{{ url_for('docs.photo', uid=u.id) }}" alt="" style="height:32px;width:32px;object-fit:cover;border-radius:50%">{% else %}<span style="display:inline-block;height:32px;width:32px;border-radius:50%;background:#4f46e5;color:#fff;text-align:center;line-height:32px;font-size:12px;font-weight:bold">{{ u.name[:1] }}</span>{% endif %}</td>
+    <td><a href="{{ url_for('hrms.employee_detail', uid=u.id) }}"><strong>{{ u.id }}</strong></a></td>
+    <td><a href="{{ url_for('hrms.employee_detail', uid=u.id) }}">{{ u.name }}</a></td>
+    <td>{{ u.designation or '-' }}</td><td>{{ u.department or '-' }}</td>
+    <td>{{ u.reporting_manager or '-' }}</td>
+    <td>{{ status_pill(u.employment_status) }}
+      {% if u.employment_status == 'pending_approval' %}<br><a class="btn small" href="{{ url_for('hrms.employee_review', uid=u.id) }}">Review</a>{% endif %}</td>
+    <td>{{ u.visa_expiry_date or '-' }}</td><td>{{ u.passport_expiry_date or '-' }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% if current_user.is_admin %}</form>{% endif %}
+{% else %}
+{% set empty_title = "No employees found" %}
+{% set empty_hint = "No employees match the current filters. Adjust the filters or add a new employee." %}
+{% set empty_create_url = url_for('hrms.employee_new') %}
+{% set empty_create_label = "+ Add Employee" %}
+{% set empty_icon = "👥" %}
+{% include "_frappe_empty.html" %}
+{% endif %}
+<script src="{{ url_for('static', filename='forms.js') }}"></script>
+{% endblock %}

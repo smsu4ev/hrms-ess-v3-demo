@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Notice{% endblock %}
+{% block content %}
+<h2>{{ notice.title }}</h2>
+<p class="muted">
+  Published {{ notice.created_at.strftime('%d %b %Y') }}
+  &middot; Audience: {{ 'Everyone' if notice.audience == 'all' else notice.audience }}
+  {% if notice.requires_ack %}&middot; <span class="badge pending">Mandatory read</span>{% endif %}
+  {% if notice.expires_at %}&middot; Expires {{ notice.expires_at.strftime('%d %b %Y') }}{% endif %}
+</p>
+<div class="formcard notice-body">
+  {{ notice.body | e | replace('\n', '<br>') | safe }}
+</div>
+{% if notice.requires_ack %}
+  {% if ack %}
+  <p><span class="badge approved">Acknowledged on {{ ack.acknowledged_at.strftime('%d %b %Y %H:%M') }}</span></p>
+  {% else %}
+  <form method="post" class="formcard">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <p>I confirm that I have read and understood this notice.</p>
+    <button class="btn primary" type="submit">Acknowledge</button>
+  </form>
+  {% endif %}
+{% endif %}
+<p><a href="{{ url_for('engagement.notifications') }}">&larr; Back to notifications</a></p>
+{% endblock %}

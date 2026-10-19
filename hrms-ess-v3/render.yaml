@@ -1,0 +1,28 @@
+# Render Blueprint — FREE sample testing deployment for HRMS+ESS v3.
+# In Render: New > Blueprint > connect the repo/folder containing this file.
+# Free limits (checked Oct 2026): 512 MB RAM, spins down after 15 min idle
+# (~1 min to wake), free Postgres expires after 30 days.
+# For a pure demo you can skip Postgres: the app falls back to SQLite,
+# but the free filesystem is ephemeral, so demo data resets on redeploy.
+services:
+  - type: web
+    name: hrms-ess-v3-demo
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 1 -b 0.0.0.0:$PORT run:app
+    envVars:
+      - key: ESS_SECRET_KEY
+        generateValue: true
+      - key: ESS_COOKIE_SECURE
+        value: "1"
+      # Correct client IP / HTTPS detection behind Render's reverse proxy
+      # (app applies ProxyFix only when this is set).
+      - key: ESS_BEHIND_PROXY
+        value: "1"
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+    # Demo users: set ESS_SEED_DEMO=1 manually in the Render dashboard
+    # (Environment tab) for the sample deploy - it auto-creates the fake
+    # demo users on startup because Render free has no Shell. Log in as
+    # HRADMIN / Demo@123. NEVER set ESS_SEED_DEMO on production.

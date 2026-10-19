@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Payslips{% endblock %}
+{% block content %}
+<h2>Payslips</h2>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Month</th><th></th></tr>
+  {% for y, m in months %}
+  <tr><td>{{ "%04d-%02d"|format(y, m) }}</td>
+      <td><a class="btn small" href="{{ url_for('views.payslip', year=y, month=m) }}">View</a></td></tr>
+  {% endfor %}
+</table></div>
+{% endblock %}

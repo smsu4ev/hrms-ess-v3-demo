@@ -1,0 +1,183 @@
+{% from "_icons.html" import icon %}
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ 'dark' if request.cookies.get('ess_theme') == 'dark' else 'light' }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="csrf-token" content="{{ csrf_token() if current_user.is_authenticated else '' }}">
+<title>{% block title %}HRMS{% endblock %} - {{ company_name }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=10">
+{% block head %}{% endblock %}
+</head>
+<body{% if ws_current is defined and ws_current %} data-ws="{{ ws_current.key }}"{% endif %}>
+{% if current_user.is_authenticated %}
+<div id="pjax-progress" aria-hidden="true"></div>
+
+{# ================= V3.8 theme shell: panel + pill top bar + drawer ================= #}
+{# The one large rounded .panel wraps the top bar and the PJAX content. The
+   header stays OUTSIDE #pjax-main so PJAX swaps never replace the shell. #}
+<div class="panel">
+  {% set ep = request.endpoint or '' %}
+  {% set is_hr = current_user.is_admin or current_user.is_hr_manager or current_user.is_hr_staff %}
+  <header class="topbar">
+    <button class="iconbtn iconbtn-hamburger" id="navToggle" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="drawer"><span class="h-ico">{{ icon('menu') }}</span></button>
+    <a class="brand-pill" href="{{ url_for('views.dashboard') }}" aria-label="{{ company_name }} home"><span class="logo-dot"></span><span class="brand-name">800 Retail HR</span></a>
+    <nav class="pillnav" aria-label="Primary">
+      <a class="pillnav-item{{ ' active' if ep == 'views.dashboard' else '' }}" href="{{ url_for('views.dashboard') }}">Dashboard</a>
+      {% if is_hr %}
+      <a class="pillnav-item{{ ' active' if ep.startswith('hrms.') else '' }}" href="{{ url_for('hrms.employees') }}">People</a>
+      {% else %}
+      <a class="pillnav-item{{ ' active' if ep == 'extras.directory' else '' }}" href="{{ url_for('extras.directory') }}">People</a>
+      {% endif %}
+      <a class="pillnav-item{{ ' active' if ep in ('views.attendance', 'engagement.punch_page') else '' }}" href="{{ url_for('views.attendance') }}">Attendance</a>
+      {% if current_user.is_admin and current_user.can_view_salary %}
+      <a class="pillnav-item{{ ' active' if ep.startswith('payroll.') else '' }}" href="{{ url_for('payroll.runs') }}">Payroll</a>
+      {% endif %}
+      <a class="pillnav-item{{ ' active' if ep == 'extras.team_calendar' else '' }}" href="{{ url_for('extras.team_calendar') }}">Calendar</a>
+      {% if current_user.is_manager %}
+      <a class="pillnav-item{{ ' active' if ep == 'views.approvals' else '' }}" href="{{ url_for('views.approvals') }}">Approvals{% if approvals_pending %}<span class="badge">{{ approvals_pending }}</span>{% endif %}</a>
+      {% endif %}
+      <button class="pillnav-item" id="moreOpen" type="button" aria-haspopup="true" aria-controls="drawer">More</button>
+    </nav>
+    <span class="topbar-spacer"></span>
+    <button class="iconbtn" id="awesomeOpen" type="button" aria-label="Search (Ctrl+K)">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    </button>
+    {% if current_user.is_admin %}
+    <a class="iconbtn iconbtn-settings" href="{{ url_for('settings.page') }}" aria-label="HR Settings">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a2 2 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </a>
+    {% endif %}
+    <button class="iconbtn iconbtn-bell" id="notifOpen" type="button" aria-label="Notifications">
+      {{ icon('bell') }}{% if unread_count %}<span class="nbadge" id="notifBadge">{{ unread_count }}</span>{% endif %}
+    </button>
+    <div class="avatar-wrap">
+      <button class="avatarbtn" id="avatarBtn" aria-haspopup="true" aria-expanded="false" title="{{ current_user.name }} ({{ current_user.id }})" aria-label="Account menu">
+        <span class="avatar-circle">{{ (current_user.name or 'U')[:1]|upper }}</span>
+      </button>
+      <div class="avatar-menu" id="avatarMenu" hidden>
+        <div class="avatar-menu-head"><strong>{{ current_user.name }}</strong><span class="muted small">{{ current_user.id }} · {{ current_user.role }}</span></div>
+        <a href="{{ url_for('views.profile') }}"><span class="m-ico">{{ icon('user') }}</span>My Profile</a>
+        <button type="button" id="themeToggle"><span class="m-ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></span>Theme</button>
+        {% if (current_user.is_admin or current_user.is_hr_manager or current_user.is_hr_staff) and desk_settings_url is defined and desk_settings_url %}
+        <a href="{{ desk_settings_url }}"><span class="m-ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z"/></svg></span>HR Settings</a>
+        {% endif %}
+        <form method="post" action="{{ url_for('auth.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit"><span class="m-ico">{{ icon('logout') }}</span>Logout</button>
+        </form>
+      </div>
+    </div>
+  </header>
+
+  {# ---------- content (PJAX swaps this) ---------- #}
+  <main id="pjax-main" data-pjax>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for cat, msg in messages %}
+        <div class="flash {{ cat }}">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+{# ---------- navigation drawer (replaces rail + workspace sidebar) ---------- #}
+<div class="drawer-scrim" id="drawerScrim" hidden aria-hidden="true"></div>
+<nav class="drawer" id="drawer" aria-label="Navigation" aria-hidden="true">
+  <div class="drawer-head">
+    <span class="logo-dot"></span><span class="brand-name">800 Retail HR</span>
+    <button class="drawer-close" id="drawerClose" type="button" aria-label="Close navigation"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  {% if ws_groups is defined %}
+  {% for g in ws_groups %}
+  <div class="d-group" data-group="{{ loop.index0 }}">
+    <button class="d-group-toggle" type="button" aria-expanded="false">
+      <span class="d-group-name">{{ g.name }}</span>
+      <svg class="d-chev" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+    </button>
+    <div class="d-links">
+      {% for l in g.links %}
+      <a href="{{ l.href }}"><span class="nav-ico">{{ icon(l.icon) }}</span><span class="nav-txt">{{ l.label }}</span></a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+</nav>
+
+{# ---------- notifications slide-over (unchanged wiring) ---------- #}
+<div class="panel-scrim" id="notifScrim" hidden></div>
+<aside class="slide-panel" id="notifPanel" aria-label="Notifications" hidden>
+  <div class="panel-head">
+    <h3>Notifications</h3>
+    <button class="panel-close" id="notifClose" aria-label="Close notifications"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="panel-tabs" role="tablist">
+    <button type="button" class="ptab active" data-ntab="all" role="tab">All</button>
+    <button type="button" class="ptab" data-ntab="event" role="tab">Events</button>
+  </div>
+  <div class="panel-body" id="notifBody">
+    {% if notif_panel is defined and notif_panel %}
+    {% for n in notif_panel %}
+    <div class="panel-item{% if not n.is_read %} unread{% endif %}" data-cat="{{ n.category }}" data-nid="{{ n.id }}" data-link="{{ n.link or url_for('engagement.notifications') }}" data-read="{{ url_for('engagement.notification_read', nid=n.id) }}" role="link" tabindex="0">
+      <span class="notif-kind badge {{ n.kind }}">{{ n.kind }}</span>
+      <div class="notif-body">
+        <strong>{{ n.title }}</strong>
+        {% if n.body %}<p class="muted small">{{ n.body }}</p>{% endif %}
+        <span class="muted small">{{ n.created_at.strftime('%d %b %Y %H:%M') }}</span>
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="muted">No notifications.</p>
+    {% endif %}
+  </div>
+  <div class="panel-foot">
+    <button class="btn small" id="notifMarkAll" type="button" data-url="{{ url_for('engagement.notifications_read_all') }}">Mark all as read</button>
+    <a class="btn small" href="{{ url_for('engagement.notifications') }}">Open notification centre</a>
+  </div>
+</aside>
+
+{# ---------- awesome bar overlay (unchanged wiring) ---------- #}
+<div class="awesome-scrim" id="awesomeScrim" hidden></div>
+<div class="awesome" id="awesome" role="dialog" aria-modal="true" aria-label="Search or type a command" data-api-url="/api/awesome" hidden>
+  <div class="awesome-head">
+    <span class="awesome-title">Search or type a command</span>
+    <button class="panel-close" id="awesomeClose" aria-label="Close search"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <input class="awesome-input" id="awesomeInput" type="text" placeholder="Search pages, employees, documents…" autocomplete="off" spellcheck="false">
+  <div class="awesome-results" id="awesomeResults"></div>
+  <div class="awesome-foot"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> select</span><span><kbd>Esc</kbd> close</span></div>
+</div>
+
+{# ---------- mobile bottom nav (unchanged 5 items) ---------- #}
+<nav class="bottomnav" id="bottomnav" aria-label="Quick navigation">
+  <a href="{{ url_for('views.dashboard') }}"><span class="bnav-ico">{{ icon('home') }}</span><span class="bnav-txt">Home</span></a>
+  <a href="{{ url_for('views.leave') }}"><span class="bnav-ico">{{ icon('calendar') }}</span><span class="bnav-txt">Leave</span></a>
+  <a href="{{ url_for('views.attendance') }}"><span class="bnav-ico">{{ icon('clock') }}</span><span class="bnav-txt">Attend.</span></a>
+  {% if current_user.is_manager %}
+  <a href="{{ url_for('views.approvals') }}"><span class="bnav-ico">{{ icon('check') }}</span><span class="bnav-txt">Approvals</span></a>
+  {% else %}
+  <a href="{{ url_for('views.payslips') }}"><span class="bnav-ico">{{ icon('card') }}</span><span class="bnav-txt">Payslips</span></a>
+  {% endif %}
+  <a href="{{ url_for('views.profile') }}"><span class="bnav-ico">{{ icon('user') }}</span><span class="bnav-txt">Profile</span></a>
+</nav>
+<script src="{{ url_for('static', filename='app.js') }}?v=5"></script>
+<script src="{{ url_for('static', filename='desk.js') }}?v=3"></script>
+{% block scripts %}{% endblock %}
+{% else %}
+<main class="authpage">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat, msg in messages %}
+      <div class="flash {{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  {% block auth %}{% endblock %}
+</main>
+{% endif %}
+</body>
+</html>
