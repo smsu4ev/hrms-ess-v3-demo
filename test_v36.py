@@ -12,7 +12,7 @@ Covers FRAPPE-CLONE-SPEC.md acceptance:
    notifications, mobile check-in, geolocation).
 6. Employee tabbed form: 7 tabs render, create round-trip, audit timeline on
    the detail page; employees list shows "List View" + status pills + filters.
-7. Dark theme toggle persists via the ess_theme cookie (server-rendered).
+7. Legacy ess_theme=dark cookie migrates to the night theme (v3.9; server-rendered).
 8. Doodle retired from desk pages; login page keeps the cream class.
 
 Uses an isolated temp SQLite DB and test fixtures only (no real employee data).
@@ -318,10 +318,13 @@ check("employees list shows status pills", b"pill" in r.data)
 check("employees list has filter row", b"filter-row" in r.data or b"name=\"status\"" in r.data)
 logout()
 
-# ================= 7) dark theme cookie =================
+# ================= 7) dark theme cookie -> night (v3.9 migration) =========
+# V3.9 absorbed the old ess_theme=dark cookie into the "night" theme key:
+# a legacy ess_theme=dark cookie (with no ess_ui_theme) now server-renders
+# data-theme="night" instead of the removed data-theme="dark".
 client.set_cookie("ess_theme", "dark")
 r = client.get("/login")
-check("dark theme persisted server-side", b'data-theme="dark"' in r.data)
+check("dark theme persisted server-side", b'data-theme="night"' in r.data)
 check("login keeps cream class", b"authpage" in r.data)
 client.delete_cookie("ess_theme")
 
@@ -345,7 +348,7 @@ _mobile = _css[_media_at:] if _media_at > 0 else ""
 check("bottomnav enabled inside mobile media query",
       ".bottomnav { display: flex" in _mobile)
 r = client.get("/ws/me")
-check("pages link the bumped stylesheet v=10", b"style.css?v=10" in r.data)
+check("pages link the bumped stylesheet v=11", b"style.css?v=11" in r.data)
 
 print()
 print(f"V3.6: {len(passed)} passed, {len(failed)} failed")

@@ -39,6 +39,8 @@ class User(UserMixin, db.Model):
     pending_status = db.Column(db.String(20))
     # v3.4.1: employee can opt out of birthday/anniversary celebration posts
     share_celebrations = db.Column(db.Boolean, default=True, nullable=False)
+    # v3.9: theme preference key (nixtio|glass|indigo|night); cookie is the fallback
+    ui_theme = db.Column(db.String(16), nullable=True)
     phone = db.Column(db.String(30))
     passport_no = db.Column(db.String(40))
     date_of_birth = db.Column(db.Date)  # v3.3: birthday celebrations

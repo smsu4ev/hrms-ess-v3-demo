@@ -1,0 +1,19 @@
+{# V3.9 shared theme cards (used by the top-bar popover, the login page,
+   the My Profile "Theme / Appearance" section, and HR Settings > Appearance).
+   Expects `theme` (the resolved key) in context. Optional `theme_options`:
+   list of (key, label, swatch1, swatch2, swatch3); defaults to the short
+   popover labels. The wrapping element must carry `data-theme-cards` so
+   desk.js wires the cards (click/keyboard -> saveTheme). #}
+{% set theme_options = theme_options|default([
+  ("nixtio", "Nixtio", "#eef3fb", "#4a90d9", "#1e3a5f"),
+  ("glass", "Glass", "#cfeee6", "#cfc4f5", "#ffd9c9"),
+  ("indigo", "Indigo", "#f1f5f9", "#4f46e5", "#312e81"),
+  ("night", "Night", "#1e293b", "#334155", "#d9e8fb"),
+]) %}
+{% for key, label, s1, s2, s3 in theme_options %}
+<div class="theme-card{% if theme == key %} active{% endif %}" data-theme-key="{{ key }}" role="button" tabindex="0" aria-pressed="{{ 'true' if theme == key else 'false' }}" aria-label="{{ label }} theme">
+  <span class="theme-swatches"><span style="background:{{ s1 }}"></span><span style="background:{{ s2 }}"></span><span style="background:{{ s3 }}"></span></span>
+  <span class="theme-name">{{ label }}</span>
+  <span class="theme-tick"{% if theme != key %} hidden{% endif %}><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>
+</div>
+{% endfor %}

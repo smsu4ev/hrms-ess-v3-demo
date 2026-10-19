@@ -14,7 +14,7 @@ settings blueprint is registered, else None) via its own context processor.
 from flask import Blueprint, current_app, jsonify, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from app import limiter
+from app import db, limiter
 from app.files import salary_visible
 from app.models import EmployeeDocument, LeaveRequest, Notification, User
 
@@ -238,6 +238,27 @@ def api_awesome():
                               "href": docs_href})
     return jsonify(pages=pages[:12], employees=employees[:8],
                    documents=documents[:6])
+
+
+# ---------------- UI theme preference (v3.9) ----------------
+THEME_KEYS = ("nixtio", "glass", "indigo", "night")
+
+
+@desk_bp.route("/api/ui-theme", methods=["POST"])
+@login_required
+def api_ui_theme():
+    """Persist the user's theme choice. Cosmetic preference — unaudited.
+
+    Invalid keys are rejected with 400; valid keys update
+    current_user.ui_theme and return {"ok": true, "theme": key}.
+    """
+    data = request.get_json(silent=True) or {}
+    key = (data.get("theme") or "").strip().lower()
+    if key not in THEME_KEYS:
+        return jsonify({"ok": False, "error": "invalid theme"}), 400
+    current_user.ui_theme = key
+    db.session.commit()
+    return jsonify({"ok": True, "theme": key})
 
 
 # ---------------- desk-shell template globals ----------------

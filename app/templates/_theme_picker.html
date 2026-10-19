@@ -1,0 +1,9 @@
+{# V3.9 theme picker (top bar + login page): palette button + popover.
+   The 4 cards come from _theme_cards.html (short labels here); the wrapping
+   popover carries data-theme-cards so desk.js wires the cards. #}
+<button class="iconbtn" id="themePickerBtn" type="button" aria-label="Change theme" aria-haspopup="dialog" aria-expanded="false" aria-controls="themePopover">
+  <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.7-.7 1.7-1.7 0-.4-.2-.8-.4-1.1-.2-.3-.4-.7-.4-1.1 0-.9.7-1.7 1.7-1.7H17c2.8 0 5-2.2 5-5 0-5.5-4.5-10-10-10z"/></svg>
+</button>
+<div class="theme-popover" id="themePopover" role="dialog" aria-label="Choose theme" data-theme-cards hidden>
+  {% include "_theme_cards.html" %}
+</div>

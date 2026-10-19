@@ -29,6 +29,20 @@
 </div>
 <p class="muted">To update personal details, please contact HR.</p>
 
+<div class="formcard" id="profile-theme">
+  <h3>Theme / Appearance</h3>
+  <p class="muted">Choose how the portal looks for you. Applies instantly and is saved to your profile.</p>
+  <div class="theme-grid cols-4" data-theme-cards>
+    {% set theme_options = [
+      ("nixtio", "Nixtio Blue", "#eef3fb", "#4a90d9", "#1e3a5f"),
+      ("glass", "Liquid Glass", "#cfeee6", "#cfc4f5", "#ffd9c9"),
+      ("indigo", "Slate & Indigo", "#f1f5f9", "#4f46e5", "#312e81"),
+      ("night", "Timeless Night", "#1e293b", "#334155", "#d9e8fb"),
+    ] %}
+    {% include "_theme_cards.html" %}
+  </div>
+</div>
+
 <div class="formcard">
   <h3>Celebration Feed Preference</h3>
   <form method="post" action="{{ url_for('views.profile_celebrations') }}">

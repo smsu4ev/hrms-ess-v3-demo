@@ -204,6 +204,7 @@ def create_app():
                 ("is_hr_manager", "BOOLEAN"),
                 ("pending_status", "VARCHAR(20)"),
                 ("share_celebrations", "BOOLEAN"),  # v3.4.1 celebration opt-out
+                ("ui_theme", "VARCHAR(16)"),        # v3.9 theme preference key
             ]:
                 add_column("users", col, ddl)
             add_column("punch_records", "low_accuracy", "BOOLEAN")  # v3.4.1

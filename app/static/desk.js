@@ -37,15 +37,115 @@
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") { close(); } });
   }
 
-  /* ---------- theme toggle (cookie ess_theme + data-theme, server reads cookie) ---------- */
+  /* ---------- theme cards: shared by the top-bar popover, the login page,
+     the My Profile "Theme / Appearance" section, and HR Settings > Appearance.
+     Every wrapper with [data-theme-cards] gets click/keyboard wiring; the
+     popover additionally closes after a choice. ---------- */
+  function wireThemeCards(container, afterChoose) {
+    var cards = container.querySelectorAll(".theme-card");
+    for (var i = 0; i < cards.length; i++) {
+      (function (card) {
+        function choose() {
+          saveTheme(card.getAttribute("data-theme-key"));
+          if (afterChoose) { afterChoose(); }
+        }
+        card.addEventListener("click", choose);
+        card.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            choose();
+          }
+        });
+      })(cards[i]);
+    }
+  }
+
+  var THEME_KEYS = ["nixtio", "glass", "indigo", "night"];
+  function themeCookie(name) {
+    var m = document.cookie.match(new RegExp("(?:^|;\\s*)" + name + "=([^;]*)"));
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+  function setThemeCookie(key) {
+    document.cookie = "ess_ui_theme=" + encodeURIComponent(key) +
+      "; path=/; max-age=31536000; SameSite=Lax";
+  }
+  function applyTheme(key) {
+    if (THEME_KEYS.indexOf(key) < 0) { return; }
+    document.documentElement.setAttribute("data-theme", key);
+    var cards = document.querySelectorAll(".theme-card");
+    for (var i = 0; i < cards.length; i++) {
+      var on = cards[i].getAttribute("data-theme-key") === key;
+      cards[i].classList.toggle("active", on);
+      cards[i].setAttribute("aria-pressed", on ? "true" : "false");
+      var tick = cards[i].querySelector(".theme-tick");
+      if (tick) { tick.hidden = !on; }
+    }
+  }
+  function saveTheme(key) {
+    if (THEME_KEYS.indexOf(key) < 0) { return; }
+    applyTheme(key);
+    setThemeCookie(key);
+    // Logged-in users also persist server-side (User.ui_theme).
+    if (document.body.hasAttribute("data-authed")) {
+      fetch("/api/ui-theme", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
+        body: JSON.stringify({ theme: key })
+      }).catch(function () { /* cosmetic preference: non-fatal */ });
+    }
+  }
   function initTheme() {
-    var btn = $("themeToggle");
-    if (!btn) { return; }
-    btn.addEventListener("click", function () {
-      var next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", next);
-      document.cookie = "ess_theme=" + next + "; path=/; max-age=31536000; SameSite=Lax";
-    });
+    // Migrate the legacy ess_theme=dark cookie -> ess_ui_theme=night (one-time),
+    // then clear the legacy cookie.
+    if (!themeCookie("ess_ui_theme") && themeCookie("ess_theme") === "dark") {
+      setThemeCookie("night");
+      document.cookie = "ess_theme=; path=/; max-age=0; SameSite=Lax";
+    }
+    // Treat any legacy data-theme="dark" markup as "night".
+    if (document.documentElement.getAttribute("data-theme") === "dark") {
+      document.documentElement.setAttribute("data-theme", "night");
+    }
+    var btn = $("themePickerBtn"), pop = $("themePopover");
+    function closePicker() {
+      if (!pop) { return; }
+      hide(pop);
+      if (btn) { btn.setAttribute("aria-expanded", "false"); }
+    }
+    if (btn && pop) {
+      function openPicker() {
+        show(pop);
+        btn.setAttribute("aria-expanded", "true");
+      }
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (pop.hidden) { openPicker(); } else { closePicker(); }
+      });
+      pop.addEventListener("click", function (e) { e.stopPropagation(); });
+      document.addEventListener("click", closePicker);
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") { closePicker(); }
+      });
+      window.__openThemePicker = openPicker;
+    }
+    // Wire every theme-card group on the page: the top-bar popover (closes
+    // after a choice) plus any static sections (My Profile, HR Settings).
+    var cardGroups = document.querySelectorAll("[data-theme-cards]");
+    for (var g = 0; g < cardGroups.length; g++) {
+      (function (group) {
+        wireThemeCards(group, (pop && group === pop) ? closePicker : null);
+      })(cardGroups[g]);
+    }
+    // Avatar-menu "Theme" item (id themeToggle kept as the hook) now opens
+    // the picker instead of toggling dark/light.
+    var legacy = $("themeToggle");
+    if (legacy) {
+      legacy.addEventListener("click", function () {
+        var menu = $("avatarMenu");
+        if (menu) { hide(menu); }
+        if (window.__openThemePicker) { window.__openThemePicker(); }
+      });
+    }
   }
 
   /* ---------- navigation drawer (v3.7: replaces rail + workspace sidebar) ---------- */

@@ -52,6 +52,23 @@ label.check input:disabled { cursor:not-allowed; }
 <h2>HR Settings</h2>
 <p class="muted">Workspace configuration for HR administrators. Toggles marked <strong>wired</strong> take effect immediately; other rows link to the page where the setting is actually managed. All changes are audited.</p>
 
+{# V3.9: admin's own theme preference (per-user, like the top-bar picker and
+   My Profile > Theme). Outside the settings POST form: it persists via
+   the ess_ui_theme cookie + POST /api/ui-theme, not via HR Settings. #}
+<div class="formcard" id="settings-appearance" style="margin-bottom:16px">
+  <h3>Appearance</h3>
+  <p class="muted">Your personal theme preference. The theme is per-user — it only changes how the portal looks for you, not for anyone else.</p>
+  <div class="theme-grid cols-4" data-theme-cards>
+    {% set theme_options = [
+      ("nixtio", "Nixtio Blue", "#eef3fb", "#4a90d9", "#1e3a5f"),
+      ("glass", "Liquid Glass", "#cfeee6", "#cfc4f5", "#ffd9c9"),
+      ("indigo", "Slate & Indigo", "#f1f5f9", "#4f46e5", "#312e81"),
+      ("night", "Timeless Night", "#1e293b", "#334155", "#d9e8fb"),
+    ] %}
+    {% include "_theme_cards.html" %}
+  </div>
+</div>
+
 <form method="post" action="{{ url_for('settings.page') }}" data-dirty-watch>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="stabs">

@@ -19,7 +19,7 @@ Covers V37-APP-UI-SPEC.md acceptance (v3.8: shell + home markup updated):
    before the <=860px media query (V3.6.2 regression guard).
 5. /apps renders grouped tiles per area.
 6. Every /ws/<key> home returns 200 for admin.
-7. Asset versions: style.css?v=10, app.js?v=5, desk.js?v=3 (v3.8 bump).
+7. Asset versions: style.css?v=11, app.js?v=5, desk.js?v=5 (v3.9 follow-up: desk.js generalised to wire every [data-theme-cards] group).
 
 Uses an isolated temp SQLite DB and test fixtures only (no real employee data).
 Run: rm -f /tmp/test_v37.db && ESS_SECRET_KEY=testsecret12345 \\
@@ -243,9 +243,9 @@ logout()
 # ================= 7) asset versions bumped =================
 login("HRADMIN", "pw-HRADMIN")
 r = client.get("/")
-check("pages link the bumped stylesheet v=10", b"style.css?v=10" in r.data)
+check("pages link the bumped stylesheet v=11", b"style.css?v=11" in r.data)
 check("pages link app.js v=5", b"app.js?v=5" in r.data)
-check("pages link desk.js v=3", b"desk.js?v=3" in r.data)
+check("pages link desk.js v=5", b"desk.js?v=5" in r.data)
 logout()
 
 print()

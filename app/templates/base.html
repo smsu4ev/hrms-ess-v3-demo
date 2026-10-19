@@ -1,15 +1,26 @@
 {% from "_icons.html" import icon %}
 <!DOCTYPE html>
-<html lang="en" data-theme="{{ 'dark' if request.cookies.get('ess_theme') == 'dark' else 'light' }}">
+{# V3.9 theme resolution order: 1) logged-in User.ui_theme, 2) ess_ui_theme cookie,
+   3) legacy ess_theme==dark -> night, 4) nixtio default. #}
+{% set theme_keys = ["nixtio", "glass", "indigo", "night"] %}
+{% set theme = "nixtio" %}
+{% if current_user.is_authenticated and current_user.ui_theme in theme_keys %}
+{% set theme = current_user.ui_theme %}
+{% elif request.cookies.get("ess_ui_theme") in theme_keys %}
+{% set theme = request.cookies.get("ess_ui_theme") %}
+{% elif request.cookies.get("ess_theme") == "dark" %}
+{% set theme = "night" %}
+{% endif %}
+<html lang="en" data-theme="{{ theme }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="csrf-token" content="{{ csrf_token() if current_user.is_authenticated else '' }}">
 <title>{% block title %}HRMS{% endblock %} - {{ company_name }}</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=10">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=11">
 {% block head %}{% endblock %}
 </head>
-<body{% if ws_current is defined and ws_current %} data-ws="{{ ws_current.key }}"{% endif %}>
+<body{% if ws_current is defined and ws_current %} data-ws="{{ ws_current.key }}"{% endif %}{% if current_user.is_authenticated %} data-authed="1"{% endif %}>
 {% if current_user.is_authenticated %}
 <div id="pjax-progress" aria-hidden="true"></div>
 
@@ -43,6 +54,7 @@
     <button class="iconbtn" id="awesomeOpen" type="button" aria-label="Search (Ctrl+K)">
       <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     </button>
+    {% include "_theme_picker.html" %}
     {% if current_user.is_admin %}
     <a class="iconbtn iconbtn-settings" href="{{ url_for('settings.page') }}" aria-label="HR Settings">
       <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a2 2 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z"/></svg>
@@ -58,7 +70,7 @@
       <div class="avatar-menu" id="avatarMenu" hidden>
         <div class="avatar-menu-head"><strong>{{ current_user.name }}</strong><span class="muted small">{{ current_user.id }} · {{ current_user.role }}</span></div>
         <a href="{{ url_for('views.profile') }}"><span class="m-ico">{{ icon('user') }}</span>My Profile</a>
-        <button type="button" id="themeToggle"><span class="m-ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></span>Theme</button>
+        <button type="button" id="themeToggle"><span class="m-ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.7-.7 1.7-1.7 0-.4-.2-.8-.4-1.1-.2-.3-.4-.7-.4-1.1 0-.9.7-1.7 1.7-1.7H17c2.8 0 5-2.2 5-5 0-5.5-4.5-10-10-10z"/></svg></span>Theme</button>
         {% if (current_user.is_admin or current_user.is_hr_manager or current_user.is_hr_staff) and desk_settings_url is defined and desk_settings_url %}
         <a href="{{ desk_settings_url }}"><span class="m-ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z"/></svg></span>HR Settings</a>
         {% endif %}
@@ -165,7 +177,6 @@
   <a href="{{ url_for('views.profile') }}"><span class="bnav-ico">{{ icon('user') }}</span><span class="bnav-txt">Profile</span></a>
 </nav>
 <script src="{{ url_for('static', filename='app.js') }}?v=5"></script>
-<script src="{{ url_for('static', filename='desk.js') }}?v=3"></script>
 {% block scripts %}{% endblock %}
 {% else %}
 <main class="authpage">
@@ -179,5 +190,6 @@
   {% block auth %}{% endblock %}
 </main>
 {% endif %}
+<script src="{{ url_for('static', filename='desk.js') }}?v=5"></script>
 </body>
 </html>
