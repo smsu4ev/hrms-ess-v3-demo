@@ -1,0 +1,47 @@
+name: Unzip HRMS package (one-shot)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract hrms-ess-v3.zip over repo root
+        run: |
+          set -euo pipefail
+          if [ ! -f hrms-ess-v3.zip ]; then
+            echo "ERROR: hrms-ess-v3.zip not found at repo root" >&2
+            exit 1
+          fi
+          rm -rf /tmp/pkg
+          mkdir -p /tmp/pkg
+          unzip -o hrms-ess-v3.zip -d /tmp/pkg
+          # If the contents come out nested under an hrms-ess-v3/ folder,
+          # apply the folder CONTENTS to the repo root instead.
+          if [ -d /tmp/pkg/hrms-ess-v3 ] && [ "$(ls -A /tmp/pkg | wc -l)" -eq 1 ]; then
+            cp -a /tmp/pkg/hrms-ess-v3/. .
+          else
+            cp -a /tmp/pkg/. .
+          fi
+          rm -rf /tmp/pkg hrms-ess-v3.zip
+          echo "Extraction complete. Repo root now contains:"
+          ls -la | head -40
+
+      - name: Commit and push as github-actions bot
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+          else
+            git commit -m "Deploy HRMS V3.9 theme-options: extract package contents to repo root (one-shot)"
+            git push
+          fi
