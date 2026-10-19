@@ -1,0 +1,23 @@
+name: Clean up one-shot workflow files
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Delete one-shot workflow files
+        run: |
+          rm -f .github/workflows/unzip.yml .github/workflows/cleanup.yml
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Clean up one-shot workflow files"
+          git push
