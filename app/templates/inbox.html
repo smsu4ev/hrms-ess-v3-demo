@@ -54,6 +54,19 @@
   {% else %}<tr><td colspan="3" class="muted">No training outstanding.</td></tr>{% endfor %}
 </table></div>
 
+<h3>Shift swaps needing my consent ({{ tasks.swaps|length }})</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Request</th><th>From</th><th>Exchange</th><th></th></tr>
+  {% for s in tasks.swaps %}
+  <tr>
+    <td>Swap #{{ s.swap.id }}</td>
+    <td>{{ s.requester.name if s.requester else s.swap.requester_id }}</td>
+    <td class="muted small">{{ s.mine.date if s.mine else '?' }} &harr; {{ s.theirs.date if s.theirs else '?' }}</td>
+    <td><a class="btn small" href="{{ url_for('helpdesk.swap_detail', swap_id=s.swap.id) }}">Respond</a></td>
+  </tr>
+  {% else %}<tr><td colspan="4" class="muted">No swap requests waiting on you.</td></tr>{% endfor %}
+</table></div>
+
 <h3>My requests in flight ({{ tasks.mine|length }})</h3>
 <div class="tbl-wrap"><table class="tbl">
   <tr><th>Type</th><th>Detail</th><th>Status</th><th></th></tr>

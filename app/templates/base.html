@@ -34,6 +34,8 @@
     <a href="{{ url_for('views.regularisation') }}"><span class="nav-ico">{{ icon('pencil') }}</span><span class="nav-txt">Regularisation</span></a>
     <a href="{{ url_for('views.payslips') }}"><span class="nav-ico">{{ icon('card') }}</span><span class="nav-txt">Payslips</span></a>
     <a href="{{ url_for('views.grievances') }}"><span class="nav-ico">{{ icon('chat') }}</span><span class="nav-txt">Grievances</span></a>
+    <a href="{{ url_for('helpdesk.my_tickets') }}"><span class="nav-ico">{{ icon('clipboard') }}</span><span class="nav-txt">My Tickets</span></a>
+    <a href="{{ url_for('helpdesk.my_swaps') }}"><span class="nav-ico">{{ icon('calendar') }}</span><span class="nav-txt">My Shift Swaps</span></a>
     <a href="{{ url_for('views.evaluations') }}"><span class="nav-ico">{{ icon('star') }}</span><span class="nav-txt">My Evaluations</span></a>
     <a href="{{ url_for('views.profile') }}"><span class="nav-ico">{{ icon('user') }}</span><span class="nav-txt">My Profile</span></a>
     <a href="{{ url_for('docs.my_documents') }}"><span class="nav-ico">{{ icon('file') }}</span><span class="nav-txt">My Documents</span></a>
@@ -48,6 +50,7 @@
     <a href="{{ url_for('views.regularisation_approvals') }}"><span class="nav-ico">{{ icon('pencil') }}</span><span class="nav-txt">Regularisation Approvals</span></a>
     <a href="{{ url_for('views.evaluations_manage') }}"><span class="nav-ico">{{ icon('star') }}</span><span class="nav-txt">Evaluations</span></a>
     <a href="{{ url_for('views.grievance_inbox') }}"><span class="nav-ico">{{ icon('chat') }}</span><span class="nav-txt">Grievance Inbox</span></a>
+    <a href="{{ url_for('helpdesk.hr_tickets') }}"><span class="nav-ico">{{ icon('clipboard') }}</span><span class="nav-txt">Helpdesk Queue</span></a>
     {% endif %}
     {% if current_user.is_admin or can_view_salary %}
     <div class="navhead">Payroll</div>

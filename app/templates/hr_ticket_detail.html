@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Ticket #{{ t.id }}{% endblock %}
+{% block content %}
+<h2>Ticket #{{ t.id }} — {{ t.subject }}</h2>
+<p class="muted">{{ t.category }} &middot; {{ t.priority }} &middot; raised by
+{{ users.get(t.requester_id).name if users.get(t.requester_id) else t.requester_id }}
+on {{ t.created_at.strftime('%d %b %Y %H:%M') }}</p>
+<p><span class="badge {{ t.status }}">{{ t.status|replace('_',' ')|title }}</span>
+{% if t.sla_overdue %}<span class="badge warn">SLA overdue</span>{% endif %}
+&middot; Assignee: {{ users.get(t.assignee_id).name if t.assignee_id and users.get(t.assignee_id) else 'Unassigned' }}</p>
+<p>{{ t.description }}</p>
+
+<div class="formcard">
+  <h3>Actions</h3>
+  <form method="post" action="{{ url_for('helpdesk.hr_ticket_status', ticket_id=t.id) }}" class="inlineform">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Status <select name="status">
+      {% for s in statuses %}<option value="{{ s }}"{% if t.status == s %} selected{% endif %}>{{ s|replace('_',' ')|title }}</option>{% endfor %}
+    </select></label>
+    <button class="btn primary small" type="submit">Update status</button>
+  </form>
+  <form method="post" action="{{ url_for('helpdesk.hr_ticket_assign', ticket_id=t.id) }}" class="inlineform">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Assignee <select name="assignee_id">
+      <option value="">Unassigned</option>
+      {% for u in staff_users %}<option value="{{ u.id }}"{% if t.assignee_id == u.id %} selected{% endif %}>{{ u.name }} ({{ u.id }})</option>{% endfor %}
+    </select></label>
+    <button class="btn small" type="submit">Assign</button>
+  </form>
+</div>
+
+<h3>Conversation</h3>
+{% for c in comments %}
+<div class="formcard">
+  <p class="muted small">{{ users.get(c.author_id).name if users.get(c.author_id) else c.author_id }} &middot; {{ c.created_at.strftime('%d %b %Y %H:%M') }}
+  {% if c.is_internal %} <span class="badge warn">Internal note — not visible to requester</span>{% endif %}</p>
+  <p>{{ c.body }}</p>
+</div>
+{% else %}<p class="muted">No comments yet.</p>{% endfor %}
+
+<div class="formcard">
+  <h3>Add comment</h3>
+  <form method="post" action="{{ url_for('helpdesk.hr_ticket_comment', ticket_id=t.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Comment<br><textarea name="body" rows="3" required></textarea></label>
+    <label><input type="checkbox" name="is_internal" value="1"> Internal note (visible to staff only)</label><br>
+    <button class="btn primary" type="submit">Post</button>
+  </form>
+</div>
+<a class="btn" href="{{ url_for('helpdesk.hr_tickets') }}">Back to queue</a>
+{% endblock %}

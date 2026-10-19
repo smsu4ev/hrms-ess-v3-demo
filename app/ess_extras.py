@@ -166,6 +166,21 @@ def _my_requests(user):
     return out
 
 
+def _swap_consent_tasks(user):
+    """Shift swaps awaiting this user's consent (pre-engine stage)."""
+    from app.models import ShiftSwapRequest, RosterAssignment, ShiftPattern
+    out = []
+    for s in ShiftSwapRequest.query.filter_by(
+            counterpart_user_id=user.id,
+            status="pending_counterpart").order_by(
+            ShiftSwapRequest.created_at.desc()).all():
+        a = RosterAssignment.query.get(s.my_assignment_id)
+        b = RosterAssignment.query.get(s.their_assignment_id)
+        req = User.query.get(s.requester_id)
+        out.append({"swap": s, "requester": req, "mine": a, "theirs": b})
+    return out
+
+
 def inbox_tasks(user):
     """Full action-item breakdown for the unified inbox."""
     from app.approvals import inbox_for, step_badge, PROCESS_LABELS
@@ -184,6 +199,7 @@ def inbox_tasks(user):
         "notices": pending_mandatory_notices(user),
         "jds": _jd_tasks(user),
         "training": _training_tasks(user),
+        "swaps": _swap_consent_tasks(user),
         "mine": _my_requests(user),
     }
 
@@ -211,6 +227,12 @@ def inbox_summary(user):
         items.append({"icon": "graduation",
                       "text": f"Complete training: {cname}",
                       "link": "/my-training"})
+    for s in tasks["swaps"]:
+        req = s["requester"]
+        items.append({"icon": "usercheck",
+                      "text": f"Respond to shift swap from "
+                              f"{req.name if req else s['swap'].requester_id}",
+                      "link": "/my-swaps"})
     return {"total": len(items), "items": items[:3]}
 
 

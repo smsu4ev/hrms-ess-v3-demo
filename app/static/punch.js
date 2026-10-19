@@ -1,11 +1,24 @@
-/* V3.3 geo + selfie check-in/out. Loaded as an external script (CSP-safe).
-   Flow per tap: get GPS fix -> open front-camera capture -> resize the
-   photo on-device -> POST everything to /attendance/punch/submit. */
+/* Geo + selfie check-in/out (V3.5.1 fix for iOS Safari).
+   iOS Safari silently ignores a programmatic file-input click that is NOT
+   inside the original tap handler, so the camera must open synchronously
+   on a user tap. Strategy:
+   - GPS acquisition starts on page load and keeps a fresh fix ready.
+   - Tapping Check In/Out with a fresh fix opens the camera in the SAME tap.
+   - If no fix is ready yet, a visible "Take Selfie" button appears once the
+     fix arrives; tapping IT opens the camera (also a direct gesture).
+   The file input is created once at startup and kept in the DOM. */
 (function () {
   "use strict";
   var statusEl = document.getElementById("punchStatus");
+  var locEl = document.getElementById("punchLoc");
   var btnIn = document.getElementById("btnPunchIn");
   var btnOut = document.getElementById("btnPunchOut");
+  var btnSelfie = document.getElementById("btnSelfie");
+
+  var latestPos = null;      // last GPS fix (GeolocationPosition)
+  var latestAt = 0;          // Date.now() when the fix arrived
+  var pendingType = null;    // "in" | "out" while a punch is in progress
+  var photoInput = null;
 
   function say(msg, kind) {
     if (!statusEl) return;
@@ -13,34 +26,98 @@
     statusEl.className = "punch-status " + (kind || "");
   }
 
-  function getPosition() {
-    return new Promise(function (resolve, reject) {
-      if (!navigator.geolocation) {
-        reject(new Error("no-geo"));
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 30000
-      });
-    });
+  function locSay() {
+    if (!locEl) return;
+    if (latestPos) {
+      var acc = Math.round(latestPos.coords.accuracy || 0);
+      locEl.textContent = "Location ready (±" + acc + " m).";
+    } else {
+      locEl.textContent = "Getting your location… allow location access if asked.";
+    }
   }
 
-  function takePhoto() {
-    return new Promise(function (resolve, reject) {
-      var input = document.createElement("input");
-      input.type = "file";
-      input.accept = "image/*";
-      input.setAttribute("capture", "user"); // front camera on mobiles
-      input.onchange = function () {
-        if (input.files && input.files[0]) resolve(input.files[0]);
-        else reject(new Error("no-photo"));
-      };
-      input.oncancel = function () { reject(new Error("no-photo")); };
-      document.body.appendChild(input);
-      input.click();
-      setTimeout(function () { input.remove(); }, 60000);
+  function busy(disabled) {
+    if (btnIn) btnIn.disabled = disabled;
+    if (btnOut) btnOut.disabled = disabled;
+  }
+
+  function freshFix() {
+    return latestPos && (Date.now() - latestAt) < 90000;
+  }
+
+  function startGps() {
+    if (!navigator.geolocation) {
+      say("This device/browser does not support location sharing. " +
+          "Use a phone browser, or ask HR for an attendance regularisation.", "err");
+      return;
+    }
+    var opts = { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 };
+    var onFix = function (pos) {
+      latestPos = pos;
+      latestAt = Date.now();
+      locSay();
+      if (pendingType && btnSelfie) {
+        btnSelfie.style.display = "";
+        say("Location found. Now tap \u201CTake Selfie\u201D to open the camera.");
+      }
+    };
+    var onErr = function () { locSay(); };
+    navigator.geolocation.getCurrentPosition(onFix, onErr, opts);
+    if (navigator.geolocation.watchPosition) {
+      navigator.geolocation.watchPosition(onFix, onErr, opts);
+    }
+  }
+
+  function ensureInput() {
+    if (photoInput) return photoInput;
+    photoInput = document.createElement("input");
+    photoInput.type = "file";
+    photoInput.accept = "image/*";
+    photoInput.setAttribute("capture", "user"); // front camera on mobiles
+    photoInput.style.display = "none";
+    photoInput.addEventListener("change", onPhotoChosen);
+    document.body.appendChild(photoInput);
+    return photoInput;
+  }
+
+  function openCamera() {
+    // MUST be called synchronously from a click handler (iOS requirement).
+    var input = ensureInput();
+    input.value = "";
+    input.click();
+  }
+
+  function onPhotoChosen() {
+    var file = photoInput.files && photoInput.files[0];
+    if (!file || !pendingType) {
+      if (!file) say("No photo taken. A selfie is required — tap Check In/Out to retry.", "err");
+      pendingType = null;
+      busy(false);
+      if (btnSelfie) btnSelfie.style.display = "none";
+      return;
+    }
+    var type = pendingType;
+    var pos = latestPos;
+    say("Resizing photo…");
+    resizePhoto(file).then(function (blob) {
+      say("Sending check-" + type + "…");
+      return postPunch(type, pos, blob);
+    }).then(function (res) {
+      pendingType = null;
+      busy(false);
+      if (btnSelfie) btnSelfie.style.display = "none";
+      if (res.body && res.body.ok) {
+        say("Checked " + type + " at " + res.body.time +
+            " (" + (res.body.location || "") + ").", "ok");
+        setTimeout(function () { window.location.reload(); }, 1200);
+      } else {
+        say((res.body && res.body.error) || "Check-in failed. Try again.", "err");
+      }
+    }).catch(function () {
+      pendingType = null;
+      busy(false);
+      if (btnSelfie) btnSelfie.style.display = "none";
+      say("Could not complete the punch. Please retry.", "err");
     });
   }
 
@@ -79,59 +156,33 @@
       body: form,
       headers: { "X-Requested-With": "XMLHttpRequest" },
       credentials: "same-origin"
-    }).then(function (r) { return r.json().then(function (j) { return { code: r.status, body: j }; }); });
-  }
-
-  function busy(disabled) {
-    if (btnIn) btnIn.disabled = disabled;
-    if (btnOut) btnOut.disabled = disabled;
+    }).then(function (r) {
+      return r.json().then(function (j) { return { code: r.status, body: j }; });
+    });
   }
 
   function doPunch(type) {
-    say(type === "in" ? "Getting your location…" : "Getting your location…");
+    pendingType = type;
     busy(true);
-    getPosition()
-      .then(function (pos) {
-        say("Location found. Opening camera — take a clear selfie…");
-        return takePhoto().then(function (file) { return { pos: pos, file: file }; });
-      })
-      .then(function (r) {
-        say("Resizing photo…");
-        return resizePhoto(r.file).then(function (blob) { return { pos: r.pos, blob: blob }; });
-      })
-      .then(function (r) {
-        say("Sending check-" + type + "…");
-        return postPunch(type, r.pos, r.blob);
-      })
-      .then(function (res) {
-        busy(false);
-        if (res.body && res.body.ok) {
-          say("Checked " + type + " at " + res.body.time +
-              " (" + (res.body.location || "") + ").", "ok");
-          setTimeout(function () { window.location.reload(); }, 1200);
-        } else {
-          say((res.body && res.body.error) || "Check-in failed. Try again.", "err");
-        }
-      })
-      .catch(function (e) {
-        busy(false);
-        var m = (e && e.message) || "";
-        if (m === "no-geo" || e.code === 1 || e.code === 2 || e.code === 3) {
-          say("Location is unavailable. Enable GPS/location permission for this site and retry. " +
-              "If you cannot share location, ask HR for an attendance regularisation.", "err");
-        } else if (m === "no-photo") {
-          say("No photo taken. A selfie is required — tap again to retry.", "err");
-        } else {
-          say("Could not complete check-" + type + ". Please retry.", "err");
-        }
-      });
+    if (freshFix()) {
+      say("Opening camera — take a clear selfie…");
+      openCamera(); // synchronous within this tap handler — required by iOS
+    } else {
+      say("Getting your location… the Take Selfie button will appear when ready.");
+      startGps();
+    }
   }
 
   if (btnIn) btnIn.addEventListener("click", function () { doPunch("in"); });
   if (btnOut) btnOut.addEventListener("click", function () { doPunch("out"); });
+  if (btnSelfie) btnSelfie.addEventListener("click", function () {
+    if (pendingType && freshFix()) {
+      say("Opening camera — take a clear selfie…");
+      openCamera(); // synchronous within this tap handler
+    }
+  });
 
-  if (!navigator.geolocation) {
-    say("This device/browser does not support location sharing. " +
-        "Use a phone browser, or ask HR for an attendance regularisation.", "err");
-  }
+  ensureInput();
+  startGps();
+  locSay();
 })();

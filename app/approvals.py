@@ -48,6 +48,7 @@ DEFAULT_MATRICES = {
     "leave": ["reporting_manager"],
     "regularisation": ["reporting_manager"],
     "expense": ["reporting_manager"],
+    "shift_swap": ["reporting_manager"],
 }
 
 
@@ -93,6 +94,7 @@ def set_demo_matrices():
         "leave": ["reporting_manager", "hr_staff", "hr_manager"],
         "regularisation": ["reporting_manager", "hr_staff"],
         "expense": ["reporting_manager", "hr_staff"],
+        "shift_swap": ["reporting_manager"],
     }
     for process_key, types in demo.items():
         matrix = get_matrix(process_key)

@@ -417,7 +417,7 @@ def approvals():
         User.id.in_([i["req"].user_id for i in leave_items])).all()} \
         if leave_items else {}
     # --- unified inbox: other chains awaiting this user
-    reg_items, creation_items, expense_items = [], [], []
+    reg_items, creation_items, expense_items, swap_items = [], [], [], []
     for inst in inbox_for(current_user):
         if inst.process_key == "regularisation":
             rr = RegularisationRequest.query.get(int(inst.ref_id))
@@ -435,13 +435,39 @@ def approvals():
             if claim is not None and claim.status == "pending":
                 expense_items.append({"claim": claim, "instance": inst,
                                       "badge": step_badge(inst)})
+        elif inst.process_key == "shift_swap":
+            from app.models import ShiftSwapRequest
+            from app.helpdesk import rest_gap_flags
+            swap = ShiftSwapRequest.query.get(int(inst.ref_id))
+            if swap is not None and swap.status == "pending_approval":
+                swap_items.append({"swap": swap, "instance": inst,
+                                   "badge": step_badge(inst),
+                                   "flags": rest_gap_flags(swap)})
+    # --- shift swaps: names + pattern labels for the table
+    swap_user_ids, swap_pattern_ids = set(), set()
+    for it in swap_items:
+        s = it["swap"]
+        swap_user_ids.update([s.requester_id, s.counterpart_user_id])
+        if s.my_pattern_id:
+            swap_pattern_ids.add(s.my_pattern_id)
+        if s.their_pattern_id:
+            swap_pattern_ids.add(s.their_pattern_id)
+    from app.models import ShiftPattern as _ShiftPattern
+    swap_users = {u.id: u for u in User.query.filter(
+        User.id.in_(swap_user_ids)).all()} if swap_user_ids else {}
+    swap_patterns = {p.id: p for p in _ShiftPattern.query.filter(
+        _ShiftPattern.id.in_(swap_pattern_ids)).all()} \
+        if swap_pattern_ids else {}
     return render_template("approvals.html",
                            items=[i["req"] for i in leave_items],
                            meta={i["req"].id: i for i in leave_items},
                            users=users, leave_types=app_config.LEAVE_TYPES,
                            reg_items=reg_items,
                            creation_items=creation_items,
-                           expense_items=expense_items)
+                           expense_items=expense_items,
+                           swap_items=swap_items,
+                           swap_users=swap_users,
+                           swap_patterns=swap_patterns)
 
 
 def _leave_approve_side_effects(req, comment):

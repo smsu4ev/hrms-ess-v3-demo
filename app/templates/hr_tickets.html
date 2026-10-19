@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Helpdesk Queue{% endblock %}
+{% block content %}
+<h2>Helpdesk Queue</h2>
+
+<form method="get" class="filters">
+  <label>Status <select name="status" onchange="this.form.submit()">
+    <option value="">All</option>
+    {% for s in statuses %}<option value="{{ s }}"{% if status == s %} selected{% endif %}>{{ s|replace('_',' ')|title }}</option>{% endfor %}
+  </select></label>
+  <label>Category <select name="category" onchange="this.form.submit()">
+    <option value="">All</option>
+    {% for code, label in categories %}<option value="{{ code }}"{% if category == code %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select></label>
+  <label>Assignee <select name="assignee" onchange="this.form.submit()">
+    <option value="">All</option>
+    <option value="mine"{% if assignee == 'mine' %} selected{% endif %}>Mine</option>
+    <option value="unassigned"{% if assignee == 'unassigned' %} selected{% endif %}>Unassigned</option>
+  </select></label>
+</form>
+
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Ticket</th><th>Requester</th><th>Category</th><th>Subject</th><th>Priority</th><th>Status</th><th>Assignee</th><th></th></tr>
+  {% for t in tickets %}
+  <tr>
+    <td>#{{ t.id }}</td>
+    <td>{{ users.get(t.requester_id).name if users.get(t.requester_id) else t.requester_id }}</td>
+    <td>{{ t.category }}</td>
+    <td>{{ t.subject }}</td>
+    <td>{{ t.priority }}</td>
+    <td><span class="badge {{ t.status }}">{{ t.status|replace('_',' ')|title }}</span>
+      {% if t.sla_overdue %}<br><span class="badge warn">SLA overdue</span>{% endif %}</td>
+    <td>{{ users.get(t.assignee_id).name if t.assignee_id and users.get(t.assignee_id) else '-' }}</td>
+    <td><a class="btn small" href="{{ url_for('helpdesk.hr_ticket_detail', ticket_id=t.id) }}">Open</a></td>
+  </tr>
+  {% else %}<tr><td colspan="8" class="muted">No tickets match the filters.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

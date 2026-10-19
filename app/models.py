@@ -1075,6 +1075,7 @@ APPROVAL_PROCESSES = [
     ("leave", "Leave"),
     ("regularisation", "Attendance Regularisation"),
     ("expense", "Expense Claims"),
+    ("shift_swap", "Shift Swaps"),
 ]
 
 APPROVER_TYPES = [
@@ -1309,3 +1310,11 @@ class LetterRequest(db.Model):
                            onupdate=datetime.utcnow, nullable=False)
 
     generated_letter = db.relationship("GeneratedLetter")
+
+
+# v3.5: helpdesk tickets + shift swaps (kept in a separate module to keep
+# models.py readable; single-table creation pattern applies).
+from app.models_v35 import (HelpdeskTicket, TicketComment,  # noqa: E402,F401
+                            ShiftSwapRequest, TICKET_CATEGORIES,
+                            TICKET_PRIORITIES, TICKET_SLA_HOURS,
+                            TICKET_STATUSES, SWAP_STATUSES)

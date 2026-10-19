@@ -25,6 +25,8 @@
     <button class="btn big" id="btnPunchOut" type="button">Check Out</button>
   </div>
 </div>
+<p class="muted" id="punchLoc">Getting your location…</p>
+<button class="btn primary big" id="btnSelfie" type="button" style="display:none">Take Selfie</button>
 <div id="punchStatus" class="punch-status" role="status" aria-live="polite"></div>
 
 {% if locations %}
@@ -40,5 +42,5 @@
 {% endif %}
 
 <p class="muted">If your phone cannot share location or open the camera, use <a href="{{ url_for('views.regularisation') }}">Attendance Regularisation</a> instead.</p>
-<script src="{{ url_for('static', filename='punch.js') }}"></script>
+<script src="{{ url_for('static', filename='punch.js') }}?v=2"></script>
 {% endblock %}

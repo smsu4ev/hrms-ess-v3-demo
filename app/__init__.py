@@ -66,6 +66,8 @@ def create_app():
     app.register_blueprint(approvals.approvals_bp)
     from app import ess_extras  # noqa: E402  (v3.3.1 ESS extras)
     app.register_blueprint(ess_extras.extras_bp)
+    from app import helpdesk  # noqa: E402  (v3.5 helpdesk + shift swaps)
+    app.register_blueprint(helpdesk.helpdesk_bp)
 
     @app.before_request
     def enforce_password_change():

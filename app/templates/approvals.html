@@ -83,4 +83,33 @@
   </tr>
   {% else %}<tr><td colspan="8" class="muted">Nothing awaiting you.</td></tr>{% endfor %}
 </table></div>
+
+<h2>Shift Swaps Awaiting Your Action</h2>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Swap</th><th>Requester</th><th>Counterpart</th><th>Exchange</th><th>Rest-gap</th><th>Chain</th><th>Decision</th></tr>
+  {% for it in swap_items %}
+  {% set s = it.swap %}
+  <tr>
+    <td>#{{ s.id }}</td>
+    <td>{{ swap_users.get(s.requester_id).name if swap_users.get(s.requester_id) else s.requester_id }}</td>
+    <td>{{ swap_users.get(s.counterpart_user_id).name if swap_users.get(s.counterpart_user_id) else s.counterpart_user_id }}</td>
+    <td>
+      {{ (swap_patterns.get(s.my_pattern_id).code if swap_patterns.get(s.my_pattern_id) else '?') }} &rarr; {{ (swap_patterns.get(s.their_pattern_id).code if swap_patterns.get(s.their_pattern_id) else '?') }}
+      <br><span class="muted small">{{ s.requester_id }} &harr; {{ s.counterpart_user_id }}</span>
+    </td>
+    <td>
+      {% for f in it.flags %}<span class="badge warn">Rest-gap risk</span><br><span class="muted small">{{ f }}</span><br>{% else %}<span class="muted">OK</span>{% endfor %}
+    </td>
+    <td><span class="chip">{{ it.badge }}</span></td>
+    <td>
+      <form method="post" action="{{ url_for('helpdesk.decide_swap', swap_id=s.id) }}" class="inlineform">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="text" name="comment" placeholder="Comment (optional)" size="16">
+        <button class="btn small primary" type="submit" name="action" value="approve">Approve</button>
+        <button class="btn small danger" type="submit" name="action" value="reject">Reject</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}<tr><td colspan="7" class="muted">Nothing awaiting you.</td></tr>{% endfor %}
+</table></div>
 {% endblock %}

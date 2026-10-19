@@ -784,3 +784,98 @@ def _seed_v331_extras():
                          f"#{lr.id}) is ready to download.",
                     link="/my-letters")
         db.session.commit()
+
+
+# ===================== HRMS+ESS V3.5 seed extras =====================
+
+def _seed_v35_extras():
+    """v3.5 demo seed: helpdesk tickets + a pending shift swap.
+
+    Idempotent: rows are seeded only when the tables are empty.
+    Demo content: 2 helpdesk tickets (EMP007 open IT ticket; EMP002 resolved
+    HR ticket with a public comment) and 1 shift swap in pending_counterpart
+    between EMP007 and EMP008.
+    """
+    from datetime import datetime, timedelta
+    from app import db
+    from app.models import (HelpdeskTicket, TicketComment, ShiftSwapRequest,
+                            RosterAssignment, ShiftPattern)
+    from app.engagement import notify_user
+    from app.audit import record as audit_record
+
+    gst_today = (datetime.utcnow() + timedelta(hours=4)).date()
+
+    if HelpdeskTicket.query.count() == 0:
+        t1 = HelpdeskTicket(
+            requester_id="EMP007", category="IT",
+            subject="VPN not connecting",
+            description="The site office VPN drops every 20 minutes. "
+                        "Please check the router - demo ticket.",
+            priority="Normal", status="open")
+        db.session.add(t1)
+        t2 = HelpdeskTicket(
+            requester_id="EMP002", category="HR",
+            subject="Payslip copy request",
+            description="Please share a signed copy of my last payslip - "
+                        "demo ticket.",
+            priority="Low", status="resolved",
+            resolved_at=datetime.utcnow())
+        db.session.add(t2)
+        db.session.flush()
+        db.session.add(TicketComment(
+            ticket_id=t2.id, author_id="HRADMIN",
+            body="Signed copy attached to your document vault - "
+                 "demo resolution.", is_internal=False))
+        notify_user("EMP002", "ticket", f"Ticket #{t2.id} resolved",
+                    f"Your ticket #{t2.id} ({t2.subject}) has been "
+                    f"resolved.", link=f"/my-tickets/{t2.id}")
+    db.session.flush()
+
+    if ShiftSwapRequest.query.count() == 0:
+        pats = {p.code: p for p in ShiftPattern.query.all()}
+
+        def future_assign(uid):
+            return (RosterAssignment.query
+                    .filter(RosterAssignment.user_id == uid,
+                            RosterAssignment.date >= gst_today)
+                    .order_by(RosterAssignment.date).first())
+
+        a = future_assign("EMP007")
+        b = future_assign("EMP008")
+        if a is None or b is None or a.shift_id == b.shift_id:
+            # Deterministic fallback: next Monday, explicit patterns.
+            nm = gst_today + timedelta(days=(7 - gst_today.weekday()))
+            if nm <= gst_today:
+                nm += timedelta(days=7)
+            a = RosterAssignment.query.filter_by(
+                user_id="EMP007", date=nm).first()
+            if a is None:
+                a = RosterAssignment(user_id="EMP007", date=nm,
+                                    shift_id=pats["NIGHT"].id,
+                                    created_by="HRADMIN")
+                db.session.add(a)
+            b = RosterAssignment.query.filter_by(
+                user_id="EMP008", date=nm).first()
+            if b is None:
+                b = RosterAssignment(user_id="EMP008", date=nm,
+                                    shift_id=pats["MORN"].id,
+                                    created_by="HRADMIN")
+                db.session.add(b)
+            db.session.flush()
+        if a.shift_id != b.shift_id:
+            swap = ShiftSwapRequest(
+                requester_id="EMP007", my_assignment_id=a.id,
+                counterpart_user_id="EMP008", their_assignment_id=b.id,
+                my_pattern_id=a.shift_id, their_pattern_id=b.shift_id,
+                status="pending_counterpart")
+            db.session.add(swap)
+            db.session.flush()
+            audit_record("shift_swap_created",
+                         f"swap #{swap.id} (demo seed): EMP007 <-> EMP008",
+                         entity="shift_swap", entity_id=swap.id)
+            notify_user(
+                "EMP008", "shift_swap", "Shift swap request",
+                "Demo Employee Seven wants to swap shifts with you. "
+                "Open My Shift Swaps to respond.", link="/my-swaps",
+                category="important")
+    db.session.flush()
