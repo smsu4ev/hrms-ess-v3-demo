@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}HR Analytics{% endblock %}
+{% block content %}
+<style>
+.ax-page .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0 18px}
+.ax-page .kpi{display:block;background:var(--card);border:1px solid var(--border,#e5e7eb);border-radius:12px;padding:12px 14px;text-decoration:none;color:inherit}
+.ax-page .kpi:hover{border-color:var(--blue)}
+.ax-page .kpi .k-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.ax-page .kpi .k-val{font-size:22px;font-weight:700;color:var(--text);margin-top:4px}
+.ax-page .kpi .k-val.alert{color:var(--danger)}
+.ax-page .kpi .k-sub{font-size:11px;color:var(--muted)}
+.ax-page .chart-card{background:var(--card);border:1px solid var(--border,#e5e7eb);border-radius:12px;padding:16px;margin-bottom:16px}
+.ax-page .chart-card h3{margin:0 0 4px;display:flex;align-items:center;gap:8px}
+.ax-page .chart-cap{font-size:12px;color:var(--muted);margin:10px 0 0}
+.ax-page .chart-cap strong{color:var(--text)}
+.ax-page .ax-empty{padding:26px;text-align:center;color:var(--muted);border:1px dashed var(--border,#e5e7eb);border-radius:10px;margin:8px 0}
+.ax-page .pills{display:inline-flex;gap:6px}
+.ax-page .pill{padding:6px 14px;border-radius:999px;border:1px solid var(--border,#e5e7eb);text-decoration:none;color:var(--muted);font-size:13px}
+.ax-page .pill.active{background:var(--navy);color:var(--navy-fg,#fff);border-color:var(--navy)}
+.ax-page .filters{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:12px 0}
+.ax-page .ax-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+.ax-page .ax-table th,.ax-page .ax-table td{padding:8px 10px;border-bottom:1px solid var(--border,#e5e7eb);text-align:left}
+.ax-page .ax-table th{color:var(--muted);font-weight:600;font-size:12px}
+.ax-page .ax-table .neg{color:var(--danger);font-weight:700}
+.ax-page .ax-table .pos{color:var(--success)}
+.ax-page .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:760px){.ax-page .two-col{grid-template-columns:1fr}}
+</style>
+
+<div class="ax-page">
+<div class="home-greet">
+  <div>
+    <h2 style="margin:0">HR Analytics</h2>
+    <p class="muted" style="margin:4px 0 0">Workforce insights from live HRMS data · scope: {{ scope_note }} · all charts are interactive (hover for values)</p>
+  </div>
+</div>
+
+{# ---- filters (GET, PJAX-safe) ---- #}
+<div class="filters">
+  <span class="muted">Period:</span>
+  <span class="pills">
+    <a class="pill{% if period == '6m' %} active{% endif %}" href="{{ url_for('hrms.analytics', period='6m', dept=dept) }}">6M</a>
+    <a class="pill{% if period == '12m' %} active{% endif %}" href="{{ url_for('hrms.analytics', period='12m', dept=dept) }}">12M</a>
+  </span>
+  {% if hr_wide %}
+  <form method="get" action="{{ url_for('hrms.analytics') }}" style="display:inline-flex;gap:8px;align-items:center;margin:0">
+    <input type="hidden" name="period" value="{{ period }}">
+    <label class="muted" for="dept">Department:</label>
+    <select name="dept" id="dept" onchange="this.form.submit()">
+      <option value="all" {% if dept == 'all' %}selected{% endif %}>All departments</option>
+      {% for d in all_depts %}
+      <option value="{{ d }}" {% if d == dept %}selected{% endif %}>{{ d }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</div>
+
+{# ---- KPI widget row ---- #}
+<div class="kpi-row">
+  <a class="kpi" href="#chart-manpower" data-kpi="headcount">
+    <div class="k-lbl">Headcount (active)</div>
+    <div class="k-val" data-value="{{ headcount }}">{{ headcount }}</div>
+    <div class="k-sub">employees on payroll</div>
+  </a>
+  <a class="kpi" href="#chart-attrition" data-kpi="attrition">
+    <div class="k-lbl">Attrition YTD</div>
+    <div class="k-val" data-value="{{ '%.2f'|format(ytd.ratio) if ytd.ratio is not none else '' }}">{% if ytd.ratio is not none %}{{ '%.1f'|format(ytd.ratio) }}%{% else %}—{% endif %}</div>
+    <div class="k-sub">{{ ytd.leavers }} leaver(s) this year{% if ytd.matched %} · {{ ytd.voluntary }} voluntary / {{ ytd.involuntary }} involuntary{% endif %}</div>
+  </a>
+  <a class="kpi" href="#chart-absenteeism" data-kpi="absenteeism">
+    <div class="k-lbl">Absenteeism (this month)</div>
+    <div class="k-val" data-value="{{ '%.2f'|format(abs_this_month) if abs_this_month is not none else '' }}">{% if abs_this_month is not none %}{{ '%.1f'|format(abs_this_month) }}%{% else %}—{% endif %}</div>
+    <div class="k-sub">absent ÷ (present+absent+late+leave)</div>
+  </a>
+  <a class="kpi" href="#chart-ot" data-kpi="ot">
+    <div class="k-lbl">OT hours (latest run)</div>
+    <div class="k-val" data-value="{{ '%.2f'|format(ot_latest) if ot_latest is not none else '' }}">{% if ot_latest is not none %}{{ '%.1f'|format(ot_latest) }}h{% else %}—{% endif %}</div>
+    <div class="k-sub">{% if ot_per_run %}{{ ot_per_run[-1].period }} · locked run{% else %}no locked run{% endif %}</div>
+  </a>
+  <a class="kpi" href="#chart-docs" data-kpi="docs">
+    <div class="k-lbl">Docs expiring ≤30 days</div>
+    <div class="k-val{% if docs_30 > 0 %} alert{% endif %}" data-value="{{ docs_30 }}">{{ docs_30 }}</div>
+    <div class="k-sub">{% if docs_expired %}{{ docs_expired }} already expired{% else %}none expired{% endif %}</div>
+  </a>
+  <a class="kpi" href="#chart-movement" data-kpi="movement">
+    <div class="k-lbl">Joiners / Leavers (this month)</div>
+    <div class="k-val" data-value="{{ cur_joiners }}-{{ cur_leavers }}"><span style="color:var(--success)">{{ cur_joiners }}</span> / <span style="color:var(--danger)">{{ cur_leavers }}</span></div>
+    <div class="k-sub">net {{ cur_joiners - cur_leavers }}</div>
+  </a>
+</div>
+
+{# ---- 1. Attrition ---- #}
+<section class="chart-card" id="chart-attrition">
+  <h3>{{ icon('chart') }} Attrition ratio</h3>
+  {% if attr_svg %}{{ attr_svg|safe }}
+  <p class="chart-cap"><strong>Formula:</strong> leavers in month ÷ average headcount ((headcount at month start + headcount at month end) / 2) × 100. Headcount and leavers from <code>User.joining_date</code> and <code>separation_date</code>/<code>exit_date</code>. Voluntary/involuntary split from the separation register (<code>SeparationRecord</code>), when recorded.</p>
+  {% else %}<p class="ax-empty"><em>No separations in the last {{ n_months }} months — nothing to chart yet.</em></p>{% endif %}
+</section>
+
+{# ---- 2. Manpower ---- #}
+<section class="chart-card" id="chart-manpower">
+  <h3>{{ icon('users') }} Department manpower</h3>
+  {% if mp_svg %}{{ mp_svg|safe }}
+  <p class="chart-cap"><strong>Source:</strong> active employees (<code>employment_status</code> = active / probation) grouped by <code>User.department</code>, descending.{% if not hr_wide %} Company total active: {{ company_total }} (all departments).{% endif %} Click a bar to open the filtered Employees list.</p>
+  {% else %}<p class="ax-empty"><em>No active employees with a department set yet.</em></p>{% endif %}
+</section>
+
+{# ---- 3. Vital documents ---- #}
+<section class="chart-card" id="chart-docs">
+  <h3>{{ icon('file') }} Vital documents expiry</h3>
+  {% if docs_svg %}{{ docs_svg|safe }}
+  <p class="chart-cap"><strong>Source:</strong> the employee document vault only (<code>EmployeeDocument</code>, superseded rows excluded, expiry date required). Tier 1 = Residence Visa, Emirates ID, Passport, Labour Card; Tier 2 = Driving Licence (certifications are not tracked as a separate document category yet); Tier 3 = everything else. User-level visa/passport/Emirates ID fields are excluded to avoid double-counting. Expired = expiry before today.</p>
+  {% if soonest %}
+  <h4 style="margin:14px 0 4px">Soonest expiries (top 10)</h4>
+  <div style="overflow-x:auto">
+  <table class="ax-table">
+    <thead><tr><th>Employee</th><th>Document</th><th>Days left</th><th></th></tr></thead>
+    <tbody>
+    {% for r in soonest %}
+      <tr>
+        <td>{{ r.employee }}</td>
+        <td>{{ r.doc }}</td>
+        <td class="{% if r.days_left < 0 %}neg{% endif %}" data-days="{{ r.days_left }}">{{ r.days_left }}</td>
+        <td><a href="{{ url_for('docs.hr_documents', user=r.user_id, expiring=1) }}">Open vault →</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+  {% else %}<p class="ax-empty"><em>No vault documents with expiry dates yet.</em></p>{% endif %}
+</section>
+
+{# ---- 4. Absenteeism ---- #}
+<section class="chart-card" id="chart-absenteeism">
+  <h3>{{ icon('clock') }} Absenteeism</h3>
+  {% if abs_svg %}{{ abs_svg|safe }}
+  <p class="chart-cap"><strong>Formula:</strong> absent ÷ (present + absent + late + leave) × 100 per month, from <code>AttendanceRecord.status</code>. Holiday and weekoff records are excluded from the denominator. By-department bars use the latest month with records{% if abs_latest %} ({{ '%04d-%02d'|format(abs_latest[0], abs_latest[1]) }}){% endif %}.</p>
+  {% if abs_dept_svg %}
+  <h4 style="margin:14px 0 4px">By department (latest month)</h4>
+  {{ abs_dept_svg|safe }}
+  {% endif %}
+  {% else %}<p class="ax-empty"><em>No attendance records in the last {{ n_months }} months.</em></p>{% endif %}
+</section>
+
+{# ---- 5. Annual vacation ---- #}
+<section class="chart-card" id="chart-vacation">
+  <h3>{{ icon('calendar') }} Annual vacation utilisation</h3>
+  {% if leave_svg %}
+  <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
+    <div>{{ leave_svg|safe }}</div>
+    <div>
+      <p class="muted" style="margin:0 0 6px">Used <strong style="color:var(--text)">{{ '%.1f'|format(leave.used) }} days</strong> of <strong style="color:var(--text)">{{ '%.1f'|format(leave.entitled) }} days</strong> entitled</p>
+      <p class="muted" style="margin:0">Remaining: <strong style="color:var(--text)">{{ '%.1f'|format(leave.entitled - leave.used) }} days</strong> (liability days — no money figure; money stays in the gated liability report)</p>
+    </div>
+  </div>
+  {% if leave_dept %}
+  <h4 style="margin:14px 0 4px">Used vs remaining by department</h4>
+  <div style="overflow-x:auto">
+  <table class="ax-table">
+    <thead><tr><th>Department</th><th>Used (days)</th><th>Remaining (days)</th></tr></thead>
+    <tbody>
+    {% for d, a in leave_dept %}
+      <tr data-dept="{{ d }}"><td>{{ d }}</td><td>{{ '%.1f'|format(a.used) }}</td><td>{{ '%.1f'|format(a.entitled - a.used) }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+  <p class="chart-cap"><strong>Formula:</strong> Σ used ÷ Σ entitled × 100 across <code>LeaveBalance</code> rows with <code>leave_type</code> = "annual". No monetary values shown.</p>
+  {% else %}<p class="ax-empty"><em>No annual-leave balances recorded yet.</em></p>{% endif %}
+</section>
+
+{# ---- 6. Overtime ---- #}
+<section class="chart-card" id="chart-ot">
+  <h3>{{ icon('stopwatch') }} Overtime hours</h3>
+  {% if ot_svg %}{{ ot_svg|safe }}
+  <p class="chart-cap"><strong>Source:</strong> hours from approved OT entries on locked payroll runs (<code>PayrollOTHours</code>, categories normal / night / restday). Hours only — no AED amounts.</p>
+  {% if ot_dept_svg %}
+  <h4 style="margin:14px 0 4px">By department ({{ ot_per_run[-1].period }})</h4>
+  {{ ot_dept_svg|safe }}
+  {% endif %}
+  {% else %}<p class="ax-empty"><em>No overtime hours on the last {{ runs|length if runs else 6 }} locked payroll run(s).</em></p>{% endif %}
+</section>
+
+{# ---- 7. Salary differences (gated) ---- #}
+{% if can_salary %}
+<section class="chart-card" id="chart-salary">
+  <h3>{{ icon('card') }} Monthly salary differences</h3>
+  {% if sal and sal_svg %}{{ sal_svg|safe }}
+  <p class="chart-cap"><strong>Source:</strong> Σ <code>PayrollLine.net</code> per locked run (last {{ sal.totals|length }}). Δ% = (this run − previous run) ÷ previous run × 100. Biggest movers: employees present in both of the last two locked runs, top 8 by |Δ net|.</p>
+  {% if sal.movers %}
+  <h4 style="margin:14px 0 4px">Biggest movers ({{ sal.prev_period }} → {{ sal.latest_period }})</h4>
+  <div style="overflow-x:auto">
+  <table class="ax-table">
+    <thead><tr><th>Employee</th><th>Prev net</th><th>Latest net</th><th>Δ AED</th><th>Δ%</th><th></th></tr></thead>
+    <tbody>
+    {% for m in sal.movers %}
+      <tr data-name="{{ m.name }}">
+        <td>{{ m.name }}</td>
+        <td>AED {{ '%.2f'|format(m.prev) }}</td>
+        <td>AED {{ '%.2f'|format(m.latest) }}</td>
+        <td class="{% if m.delta < 0 %}neg{% else %}pos{% endif %}">{{ '%+.2f'|format(m.delta) }}</td>
+        <td class="{% if m.delta < 0 %}neg{% else %}pos{% endif %}">{% if m.delta_pct is not none %}{{ '%+.1f'|format(m.delta_pct) }}%{% else %}—{% endif %}</td>
+        <td><a href="{{ url_for('payroll.run_detail', run_id=sal.latest_run_id) }}">Payslip run →</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+  {% else %}<p class="ax-empty"><em>Need at least 2 locked payroll runs to compare salary movement.</em></p>{% endif %}
+</section>
+{% endif %}
+
+{# ---- 8. Joiners vs leavers ---- #}
+<section class="chart-card" id="chart-movement">
+  <h3>{{ icon('briefcase') }} Joiners vs resignations</h3>
+  {% if jl_svg %}{{ jl_svg|safe }}
+  <p class="chart-cap"><strong>Source:</strong> joiners = <code>User.joining_date</code> in month; leavers = <code>separation_date</code> (else <code>exit_date</code>) in month. Totals over the last {{ n_months }} months: {{ jl_totals.joiners }} joiner(s), {{ jl_totals.leavers }} leaver(s), net {{ jl_totals.joiners - jl_totals.leavers }}.</p>
+  {% else %}<p class="ax-empty"><em>No joiners or leavers in the last {{ n_months }} months.</em></p>{% endif %}
+</section>
+
+</div>
+{% endblock %}

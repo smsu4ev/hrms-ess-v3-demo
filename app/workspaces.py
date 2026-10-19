@@ -134,7 +134,10 @@ def _home_link(key, roles):
 WORKSPACES = [
     {
         "key": "hr-setup", "title": "HR Setup", "icon": "building",
-        "route": "/ws/hr-setup", "roles": ["admin", "hr"],
+        "route": "/ws/hr-setup", "roles": ["admin", "hr", "manager"],
+        # V3.10: managers see this workspace so the HR Analytics link
+        # (the only manager-gated link here) is reachable; every other
+        # link stays admin/HR-only via its own roles.
         "desc": "Masters, HR settings, approval matrix, audit and admin tools.",
         "groups": [
             {"name": "Masters", "links": [
@@ -155,6 +158,10 @@ WORKSPACES = [
                  "icon": "card", "roles": ["admin", "hr"]},
                 {"label": "OT Rate Rules", "endpoint": "payroll.ot_rules",
                  "icon": "stopwatch", "roles": ["admin", "hr"]},
+            ]},
+            {"name": "Analytics", "links": [
+                {"label": "HR Analytics", "endpoint": "hrms.analytics",
+                 "icon": "chart", "roles": ["admin", "hr", "manager"]},
             ]},
             {"name": "Settings & Audit", "links": [
                 {"label": "HR Settings", "endpoint": "settings.page",

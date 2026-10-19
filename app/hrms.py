@@ -724,3 +724,202 @@ def employee_photo_upload(uid):
         db.session.commit()
         flash("Photo updated.", "success")
     return redirect(url_for("hrms.employee_detail", uid=uid))
+
+
+# ---------------- HR Analytics (V3.10) ----------------
+def analytics_access(fn):
+    """HR Analytics page: admin + HR Manager + HR Staff (company-wide),
+    managers (own department only). Plain employees get 403."""
+    from functools import wraps
+
+    @wraps(fn)
+    def wrapper(*a, **kw):
+        u = current_user
+        if not (u.is_admin or u.is_hr_manager or u.is_hr_staff or u.is_manager):
+            abort(403)
+        return fn(*a, **kw)
+    return wrapper
+
+
+@hrms_bp.route("/analytics")
+@login_required
+@analytics_access
+def analytics():
+    """HR Analytics dashboard: KPI widgets + 8 interactive SVG charts."""
+    from app import analytics as an
+    from app.files import salary_visible
+
+    today = date.today()
+    period = (request.args.get("period") or "12m").lower()
+    n_months = 6 if period == "6m" else 12
+    period = "6m" if n_months == 6 else "12m"
+
+    hr_wide = bool(current_user.is_admin or current_user.is_hr_manager
+                   or current_user.is_hr_staff)
+    users = an.base_users(current_user)
+
+    if hr_wide:
+        dept = (request.args.get("dept") or "all").strip() or "all"
+        all_depts = sorted({(u.department or "").strip() for u in users
+                            if (u.department or "").strip()})
+        if dept != "all" and dept not in all_depts:
+            dept = "all"
+    else:
+        dept = (current_user.department or "").strip()
+        all_depts = [dept] if dept else []
+
+    scoped = an.dept_filtered(users, dept if hr_wide else "all")
+    months = an.months_back(n_months)
+
+    # --- 1. Attrition ---
+    attr = an.attrition_series(scoped, months)
+    sep_map = an.sep_by_code()
+    ytd = an.attrition_ytd(scoped, sep_map)
+    attr_items = [{
+        "label": a["label"], "value": a["ratio"],
+        "value_label": an.fmt_pct(a["ratio"]),
+        "title": (f"{a['label']}: {a['leavers']} leaver(s), attrition "
+                  f"{an.fmt_pct(a['ratio'])} "
+                  f"(headcount start {a['hc_start']} / end {a['hc_end']})"),
+        "data": {"month": a["period"], "ratio": f"{a['ratio']:.2f}" if a["ratio"] is not None else "",
+                 "leavers": str(a["leavers"])},
+    } for a in attr]
+    attr_svg = an.line_chart(attr_items, aria="Monthly attrition ratio") \
+        if any(a["leavers"] for a in attr) else None
+
+    # --- 2. Manpower ---
+    mp = an.manpower(scoped)
+    company_total = sum(1 for u in users
+                        if u.employment_status in an.ACTIVE_STATUSES)
+    mp_svg = an.hbars(
+        [{"label": d, "value": c, "value_label": an.fmt_int(c),
+          "title": f"{d}: {c} active employees",
+          "data": {"dept": d, "count": str(c)},
+          "href": url_for("hrms.employees", dept=d)}
+         for d, c in mp],
+        aria="Active headcount by department", link_key="href") if mp else None
+
+    # --- 3. Vital documents ---
+    tiers, soonest = an.doc_expiry_data(scoped, today)
+    docs_svg = an.stacked_bars(tiers, aria="Document expiries by tier and window") \
+        if any(sum(t) for t in tiers) else None
+    # Non-expired docs expiring within 30 days (window index 1 = ≤30d).
+    docs_30 = sum(tiers[t][1] for t in range(3))
+    docs_expired = sum(tiers[t][0] for t in range(3))
+
+    # --- 4. Absenteeism ---
+    abs_series, abs_dept, abs_latest = an.absenteeism_data(scoped, months)
+    cur_ym = (today.year, today.month)
+    abs_this_month = next(
+        (s["pct"] for s in abs_series
+         if (s["year"], s["month"]) == cur_ym), None)
+    abs_items = [{
+        "label": s["label"], "value": s["pct"],
+        "value_label": an.fmt_pct(s["pct"]),
+        "title": (f"{s['label']}: {s['absent']} absent of {s['denom']} "
+                  f"attendance records → {an.fmt_pct(s['pct'])}"),
+        "data": {"month": s["period"],
+                 "pct": f"{s['pct']:.2f}" if s["pct"] is not None else ""},
+    } for s in abs_series]
+    abs_svg = an.vbars(abs_items, aria="Monthly absenteeism") \
+        if any(s["denom"] for s in abs_series) else None
+    abs_dept_svg = an.hbars(
+        [{"label": d, "value": p, "value_label": an.fmt_pct(p),
+          "title": f"{d}: absenteeism {an.fmt_pct(p)}", "data": {"dept": d}}
+         for d, p in sorted(abs_dept.items(), key=lambda kv: -kv[1])],
+        aria="Absenteeism by department") if abs_dept else None
+
+    # --- 5. Annual vacation ---
+    leave = an.leave_data(scoped)
+    leave_dept = sorted(leave["by_dept"].items())
+    leave_svg = an.donut(leave["pct"] or 0.0, aria="Annual leave utilisation",
+                         data={"pct": f"{(leave['pct'] or 0):.2f}"}) \
+        if leave["entitled"] else None
+
+    # --- 6. Overtime ---
+    runs = an.locked_runs(6)
+    ot_per_run, ot_dept = an.ot_data(scoped, runs)
+    ot_items = [{
+        "label": r["period"], "value": r["hours"],
+        "value_label": an.fmt_hours(r["hours"]),
+        "title": f"Payroll {r['period']}: {an.fmt_hours(r['hours'])} OT hours",
+        "data": {"period": r["period"], "hours": f"{r['hours']:.2f}"},
+    } for r in ot_per_run]
+    ot_svg = an.vbars(ot_items, aria="Overtime hours per locked payroll run",
+                      ) if any(r["hours"] for r in ot_per_run) else None
+    ot_dept_svg = an.hbars(
+        [{"label": d, "value": h, "value_label": an.fmt_hours(h),
+          "title": f"{d}: {an.fmt_hours(h)} OT hours in {runs[-1].period}",
+          "data": {"dept": d}}
+         for d, h in ot_dept.items()],
+        aria="Overtime hours by department") if ot_dept else None
+    ot_latest = ot_per_run[-1]["hours"] if ot_per_run else None
+
+    # --- 7. Salary (gated: only when the viewer has salary visibility) ---
+    can_salary = bool(salary_visible(current_user))
+    sal = an.salary_data(scoped, runs) if can_salary else None
+    sal_svg = None
+    if sal:
+        sal_items = []
+        for t in sal["totals"]:
+            d = t.get("delta_pct")
+            sal_items.append({
+                "label": t["period"], "value": t["net"],
+                "value_label": (f"{d:+.1f}%" if d is not None else ""),
+                "show_value": d is not None,
+                "title": (f"Payroll {t['period']}: net {an.fmt_aed(t['net'])}"
+                          + (f" ({d:+.1f}% vs previous run)"
+                             if d is not None else "")),
+                "data": {"period": t["period"], "net": f"{t['net']:.2f}"},
+            })
+        sal_svg = an.vbars(sal_items, aria="Net payroll per locked run")
+
+    # --- 8. Joiners vs leavers ---
+    jl = an.joiners_leavers(scoped, months)
+    jl_s1 = {"name": "Joiners", "color": "var(--success)",
+             "items": [{
+                 "label": s["label"], "value": s["joiners"],
+                 "title": f"{s['label']}: {s['joiners']} joiner(s)",
+                 "data": {"month": s["period"], "joiners": str(s["joiners"])},
+             } for s in jl]}
+    jl_s2 = {"name": "Leavers", "color": "var(--danger)",
+             "items": [{
+                 "label": s["label"], "value": s["leavers"],
+                 "title": f"{s['label']}: {s['leavers']} leaver(s)",
+                 "data": {"month": s["period"], "leavers": str(s["leavers"])},
+             } for s in jl]}
+    jl_svg = an.grouped_bars(jl_s1, jl_s2,
+                             aria="Joiners vs leavers per month") \
+        if any(s["joiners"] or s["leavers"] for s in jl) else None
+    jl_totals = {"joiners": sum(s["joiners"] for s in jl),
+                 "leavers": sum(s["leavers"] for s in jl)}
+
+    # --- KPI widgets ---
+    headcount = sum(1 for u in scoped
+                    if u.employment_status in an.ACTIVE_STATUSES)
+    cur_joiners = next((s["joiners"] for s in jl
+                        if (s["year"], s["month"]) == cur_ym), 0)
+    cur_leavers = next((s["leavers"] for s in jl
+                        if (s["year"], s["month"]) == cur_ym), 0)
+
+    return render_template(
+        "hr_analytics.html",
+        period=period, dept=dept, all_depts=all_depts, hr_wide=hr_wide,
+        can_salary=can_salary,
+        headcount=headcount, ytd=ytd, abs_this_month=abs_this_month,
+        ot_latest=ot_latest, docs_30=docs_30, docs_expired=docs_expired,
+        cur_joiners=cur_joiners, cur_leavers=cur_leavers,
+        attr_svg=attr_svg, attr=attr,
+        mp_svg=mp_svg, mp=mp, company_total=company_total,
+        docs_svg=docs_svg, tiers=tiers, soonest=soonest,
+        tier_labels=an.TIER_LABELS, window_labels=an.WINDOW_LABELS,
+        abs_svg=abs_svg, abs_dept_svg=abs_dept_svg, abs_latest=abs_latest,
+        abs_series=abs_series,
+        leave=leave, leave_svg=leave_svg, leave_dept=leave_dept,
+        ot_svg=ot_svg, ot_dept_svg=ot_dept_svg, runs=runs, ot_per_run=ot_per_run,
+        sal=sal, sal_svg=sal_svg,
+        jl_svg=jl_svg, jl_totals=jl_totals, n_months=n_months,
+        scope_note=("own department only" if not hr_wide
+                    else ("department: " + dept if dept != "all"
+                          else "company-wide")),
+    )

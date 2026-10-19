@@ -32,6 +32,9 @@
       {% endfor %}
     </div>
   </section>
+  {% if current_user.is_admin or current_user.is_hr_manager or current_user.is_hr_staff %}
+  <p class="muted" style="margin:10px 2px 0"><a href="{{ url_for('hrms.analytics') }}">View HR analytics &rarr;</a></p>
+  {% endif %}
 
   <div class="dash-grid">
 
