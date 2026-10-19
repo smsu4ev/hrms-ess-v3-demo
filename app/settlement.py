@@ -1,4 +1,5 @@
-"""Full & Final settlement (v3.2): draft -> calculated -> approved -> paid.
+"""Full & Final settlement (v3.2; disbursement split in v3.4.1):
+draft -> calculated -> approved -> disbursed -> paid.
 
 Permissions: admin OR a user granted salary visibility by the HR Manager
 (hr_required); managers without that permission get 403 (salary data).
@@ -6,7 +7,7 @@ Approval enforces creator != approver (SoD, same rule as payroll runs).
 Settlement detail views are audited.
 """
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import Blueprint, request, render_template, abort, redirect, url_for, flash
@@ -31,9 +32,28 @@ SEPARATION_TYPES = ["Resignation", "Termination", "Contract End",
 def unpaid_absence_days(user_id, start, end):
     """Days excluded from gratuity service (Art. 51): approved unpaid leave
     days + unexcused absence days (AttendanceRecord status 'absent') between
-    joining and the last working day."""
+    joining and the last working day.
+
+    v3.4.1 refinement: an 'absent' day inside an APPROVED leave period of
+    any other type (e.g. sick leave marked absent by a bulk import) is
+    approved statutory leave, not unexcused absence — it must NOT be
+    counted. Unpaid-leave days count once (absent days inside an unpaid
+    period are not double counted).
+    """
     if not start or not end or end < start:
         return 0
+    covered = set()  # dates covered by ANY approved leave period
+    for r in (LeaveRequest.query
+              .filter(LeaveRequest.user_id == user_id,
+                      LeaveRequest.status == "approved",
+                      LeaveRequest.start_date <= end,
+                      LeaveRequest.end_date >= start).all()):
+        lo = max(r.start_date, start)
+        hi = min(r.end_date, end)
+        d = lo
+        while d <= hi:
+            covered.add(d)
+            d = d + timedelta(days=1)
     n = 0
     for r in (LeaveRequest.query
               .filter(LeaveRequest.user_id == user_id,
@@ -49,8 +69,14 @@ def unpaid_absence_days(user_id, start, end):
           .filter(AttendanceRecord.user_id == user_id,
                   AttendanceRecord.status == "absent",
                   AttendanceRecord.date >= start,
-                  AttendanceRecord.date <= end).count())
-    return n
+                  AttendanceRecord.date <= end).count()) - len({
+                      r.date for r in AttendanceRecord.query.filter(
+                          AttendanceRecord.user_id == user_id,
+                          AttendanceRecord.status == "absent",
+                          AttendanceRecord.date >= start,
+                          AttendanceRecord.date <= end).all()
+                      if r.date in covered})
+    return max(n, 0)
 
 
 def fixed_earnings_total(user_id, as_of):
@@ -351,13 +377,90 @@ def approve(sid):
     return redirect(url_for("settlement.detail", sid=sid))
 
 
+@settlement_bp.route("/settlements/<int:sid>/mark-disbursed", methods=["POST"])
+@login_required
+@hr_required
+def mark_disbursed(sid):
+    """Gate 1 — payment: record disbursement with a payment proof.
+
+    Only from 'approved'. Requires a payment proof upload (bank transfer
+    advice / WPS confirmation / cheque copy) plus a payment reference.
+    Disbursement stops the Art. 53 overdue clock; the signed MOHRE
+    cancellation / EOS receipt (gate 2) still gates Mark Paid.
+    """
+    import os
+    from app.files import valid_document, store_file, upload_root
+    st = FinalSettlement.query.get_or_404(sid)
+    if st.status != "approved":
+        flash("Only an approved settlement can be marked disbursed.", "error")
+        return redirect(url_for("settlement.detail", sid=sid))
+    payment_ref = (request.form.get("payment_ref") or "").strip()[:80]
+    file = request.files.get("payment_proof")
+    if not payment_ref:
+        flash("A payment reference is required.", "error")
+        return redirect(url_for("settlement.detail", sid=sid))
+    if not file or not file.filename:
+        flash("Upload a payment proof (bank transfer advice, WPS "
+              "confirmation, or cheque copy).", "error")
+        return redirect(url_for("settlement.detail", sid=sid))
+    data = file.read()
+    kind, err = valid_document(data, file.filename)
+    if err:
+        flash(err, "error")
+        return redirect(url_for("settlement.detail", sid=sid))
+    if st.payment_doc_path:
+        try:
+            os.remove(os.path.join(upload_root(), "settlement_payments",
+                                   os.path.basename(st.payment_doc_path)))
+        except OSError:
+            pass
+    st.payment_doc_path = store_file(
+        data, "settlement_payments", "jpg" if kind == "jpg" else kind)
+    st.payment_ref = payment_ref
+    st.status = "disbursed"
+    st.disbursed_at = datetime.utcnow()
+    st.disbursed_by_id = current_user.id
+    record("settlement_disbursed",
+           f"{st.user_id} net {st.net:.2f} paid via ref {payment_ref}",
+           entity="settlement", entity_id=st.id)
+    db.session.commit()
+    flash("Settlement marked as disbursed. Upload the signed cancellation "
+          "receipt to close it.", "success")
+    return redirect(url_for("settlement.detail", sid=sid))
+
+
+@settlement_bp.route("/settlements/<int:sid>/payment-proof", methods=["GET"])
+@login_required
+@hr_required
+def view_payment(sid):
+    """Serve the payment proof (admin/salary-permission, audited)."""
+    import os
+    from app.files import read_file
+    from flask import send_file
+    import io
+    st = FinalSettlement.query.get_or_404(sid)
+    if not st.payment_doc_path:
+        abort(404)
+    data = read_file("settlement_payments",
+                     os.path.basename(st.payment_doc_path))
+    if not data:
+        abort(404)
+    record("settlement_payment_proof_viewed", f"{st.user_id}: payment proof",
+           entity="settlement", entity_id=st.id)
+    db.session.commit()
+    ext = st.payment_doc_path.rsplit(".", 1)[-1].lower()
+    mime = {"pdf": "application/pdf", "png": "image/png"}.get(ext, "image/jpeg")
+    return send_file(io.BytesIO(data), mimetype=mime)
+
+
 @settlement_bp.route("/settlements/<int:sid>/mark-paid", methods=["POST"])
 @login_required
 @hr_required
 def mark_paid(sid):
     st = FinalSettlement.query.get_or_404(sid)
-    if st.status != "approved":
-        flash("Only an approved settlement can be marked paid.", "error")
+    if st.status != "disbursed":
+        flash("Only a disbursed settlement can be marked paid — disburse the "
+              "payment first.", "error")
     elif not st.cancellation_doc_path:
         flash("Upload the signed MOHRE cancellation / EOS receipt before marking "
               "this settlement as paid.", "error")
@@ -380,8 +483,8 @@ def upload_receipt(sid):
     import os
     from app.files import valid_document, store_file, upload_root
     st = FinalSettlement.query.get_or_404(sid)
-    if st.status not in ("approved", "calculated"):
-        flash("A receipt can only be attached to a calculated/approved settlement.",
+    if st.status not in ("approved", "calculated", "disbursed"):
+        flash("A receipt can only be attached to a calculated/approved/disbursed settlement.",
               "error")
         return redirect(url_for("settlement.detail", sid=sid))
     file = request.files.get("receipt")

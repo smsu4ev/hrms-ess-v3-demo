@@ -249,14 +249,16 @@ def punch_page():
                                is_active=True).all())
 
 
-def _record_punch(user, ptype, lat, lng, accuracy, photo_path, loc, dist):
+def _record_punch(user, ptype, lat, lng, accuracy, photo_path, loc, dist,
+                  low_accuracy=False):
     """Create the punch row and update today's AttendanceRecord."""
     now = gst_now()
     punch = PunchRecord(
         user_id=user.id, punch_type=ptype, punched_at=datetime.utcnow(),
         local_date=now.date(), latitude=lat, longitude=lng,
         accuracy_m=accuracy, location_id=loc.id if loc else None,
-        distance_m=dist, photo_path=photo_path)
+        distance_m=dist, photo_path=photo_path,
+        low_accuracy=low_accuracy)
     db.session.add(punch)
     hhmm = now.strftime("%H:%M")
     rec = AttendanceRecord.query.filter_by(user_id=user.id,
@@ -316,18 +318,32 @@ def punch_submit():
     loc, dist = match_location(lat, lng)
     active_count = WorkLocation.query.filter_by(is_active=True).count()
     if active_count > 0 and (loc is None or dist > loc.radius_m):
-        nearest = f" (nearest: {loc.name}, {dist:,.0f} m away)" if loc else ""
+        # v3.4.1: no location/distance detail when far away — the generic
+        # message discloses nothing about the site's position.
+        detail = (dist is not None and dist <= 2000)
+        nearest = (f" (nearest: {loc.name}, {dist:,.0f} m away)"
+                   if loc and detail else "")
         audit_record("punch_rejected",
                      f"{current_user.id} {ptype} at ({lat:.5f},{lng:.5f}){nearest}",
                      entity="punch", actor_id=current_user.id)
         db.session.commit()
-        return jsonify(ok=False,
-                       error=f"You are outside every work location{nearest}. "
-                             f"Move inside the site boundary and retry."), 403
+        err = ("You are outside every authorised work location."
+               if not detail
+               else f"You are outside every work location{nearest}. "
+                    f"Move inside the site boundary and retry.")
+        return jsonify(ok=False, error=err), 403
 
     stored = store_file(jpg, PUNCH_DIR, "jpg")
+    # v3.4.1: poor GPS accuracy is flagged, not rejected — the punch still
+    # counts if it is inside a geofence; HR sees the flag in the list.
+    low_acc = accuracy is not None and accuracy > 150
     punch = _record_punch(current_user, ptype, lat, lng, accuracy,
-                          stored, loc, dist)
+                          stored, loc, dist, low_accuracy=low_acc)
+    if low_acc:
+        audit_record("punch_low_accuracy",
+                     f"{current_user.id} {ptype} with {accuracy:.0f} m GPS "
+                     f"accuracy", entity="punch", entity_id=punch.id,
+                     actor_id=current_user.id)
     audit_record("punch_accepted",
                  f"{current_user.id} {ptype} @ {loc.name if loc else 'unrestricted'}",
                  entity="punch", entity_id=punch.id, actor_id=current_user.id)
@@ -379,12 +395,37 @@ def hr_punches():
                            view_date=d)
 
 
+@engagement_bp.route("/hrms/punches/<int:pid>/hold", methods=["POST"])
+@login_required
+def punch_hold(pid):
+    """Admin-only: put a punch photo on legal hold (pauses the 45-day
+    purge) or release it. Audited."""
+    if not current_user.is_admin:
+        abort(403)
+    p = PunchRecord.query.get_or_404(pid)
+    hold = request.form.get("action") == "hold"
+    p.legal_hold = hold
+    audit_record("punch_legal_hold" if hold else "punch_legal_hold_released",
+                 f"punch #{p.id} of {p.user_id} "
+                 f"{'held' if hold else 'released'}",
+                 entity="punch", entity_id=p.id, actor_id=current_user.id)
+    db.session.commit()
+    flash(f"Punch photo {'placed on legal hold' if hold else 'released from legal hold'}.",
+          "success")
+    return redirect(url_for("engagement.hr_punches",
+                            date=p.local_date.isoformat()))
+
+
 # ---------------- 45-day photo retention ----------------
 
 def purge_punch_photos(days=PUNCH_PHOTO_DAYS):
-    """Delete punch photo files older than `days`; keep the records."""
+    """Delete punch photo files older than `days`; keep the records.
+
+    v3.4.1: records on legal hold are skipped (their photos are kept).
+    """
     cutoff = datetime.utcnow() - timedelta(days=days)
     old = PunchRecord.query.filter(PunchRecord.photo_path.isnot(None),
+                                   PunchRecord.legal_hold.isnot(True),
                                    PunchRecord.created_at < cutoff).all()
     n = 0
     for p in old:
@@ -589,6 +630,10 @@ def ensure_todays_celebrations():
         return []
     made = []
     for u in active_users():
+        # v3.4.1: employees who opted out get no post (they still receive
+        # notifications and can wish others).
+        if getattr(u, "share_celebrations", True) is False:
+            continue
         kinds = []
         if (u.date_of_birth and u.date_of_birth.month == today.month
                 and u.date_of_birth.day == today.day):
@@ -998,8 +1043,19 @@ def training_quiz(cid):
               + (" A certification was issued." if cert_made else ""),
               "success" if passed else "error")
         return redirect(url_for("engagement.training_course_page", cid=cid))
+    # v3.4.1: shuffle question order and each question's option order
+    # server-side on every render. Options are submitted by their ORIGINAL
+    # index, so grading (which compares against q.correct_index) is
+    # unaffected by the shuffle.
+    import random
+    quiz_questions = []
+    for q in questions:
+        opts = list(enumerate(q.options))
+        random.shuffle(opts)
+        quiz_questions.append({"q": q, "opts": opts})
+    random.shuffle(quiz_questions)
     return render_template("my_training_quiz.html", course=c,
-                           questions=questions)
+                           quiz_questions=quiz_questions)
 
 
 @engagement_bp.route("/training/material/<int:cid>")
@@ -1234,8 +1290,16 @@ def my_jd_detail(aid):
                 ack.status = "acknowledged"
                 ack.jd_version = jd.version
                 ack.acknowledged_at = datetime.utcnow()
+                # v3.4.1: tamper evidence — hash of the exact text
+                # acknowledged, plus the request user agent.
+                import hashlib
+                ack.jd_text_hash = hashlib.sha256(
+                    (jd.title + "\n" + (jd.body or "") + "\n"
+                     + str(jd.version)).encode("utf-8")).hexdigest()
+                ack.user_agent = request.headers.get("User-Agent", "")[:255]
                 audit_record("jd_acknowledged",
-                             f"{jd.title} v{jd.version} by {typed}",
+                             f"{jd.title} v{jd.version} by {typed} "
+                             f"(hash {ack.jd_text_hash[:12]}...)",
                              entity="jd", entity_id=jd.id,
                              actor_id=current_user.id,
                              old_value=ack.status, new_value="acknowledged")

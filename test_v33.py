@@ -190,7 +190,11 @@ r = client.post("/attendance/punch/submit", data={
     content_type="multipart/form-data")
 j = r.get_json()
 check("punch outside geo-fence rejected", r.status_code == 403 and not j["ok"])
-check("rejection mentions distance", "away" in j.get("error", ""))
+# v3.4.1: beyond 2 km the rejection is deliberately generic (no distance
+# or location detail — discloses nothing about the site's position).
+check("rejection beyond 2km is generic (no distance)",
+      "away" not in j.get("error", "")
+      and j.get("error") == "You are outside every authorised work location.")
 with app.app_context():
     rej = AuditLog.query.filter_by(action="punch_rejected").first()
     check("rejected punch audit-logged", rej is not None)

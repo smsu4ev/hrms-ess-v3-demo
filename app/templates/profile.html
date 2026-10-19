@@ -29,6 +29,18 @@
 </div>
 <p class="muted">To update personal details, please contact HR.</p>
 
+<div class="formcard">
+  <h3>Celebration Feed Preference</h3>
+  <form method="post" action="{{ url_for('views.profile_celebrations') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label><input type="checkbox" name="share_celebrations" value="on"
+      {% if current_user.share_celebrations %}checked{% endif %}>
+      Share my birthday and work anniversary on the company feed</label>
+    <button class="btn small primary" type="submit">Save Preference</button>
+  </form>
+  <p class="muted">If unticked, no birthday or anniversary post is created for you (you still receive notifications and can wish others).</p>
+</div>
+
 {% if my_deps %}
 <h3>My Current Deployment</h3>
 <div class="tbl-wrap">

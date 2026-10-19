@@ -37,6 +37,8 @@ class User(UserMixin, db.Model):
     # as employment_status="pending_approval" (is_active=False); the HR
     # Manager's approval activates it with the intended status below.
     pending_status = db.Column(db.String(20))
+    # v3.4.1: employee can opt out of birthday/anniversary celebration posts
+    share_celebrations = db.Column(db.Boolean, default=True, nullable=False)
     phone = db.Column(db.String(30))
     passport_no = db.Column(db.String(40))
     date_of_birth = db.Column(db.Date)  # v3.3: birthday celebrations
@@ -706,9 +708,11 @@ class RosterSettings(db.Model):
 class FinalSettlement(db.Model):
     """Full & Final settlement for a separating employee (v3.2).
 
-    Status flow: draft -> calculated -> approved -> paid.
+    Status flow: draft -> calculated -> approved -> disbursed -> paid.
     Calculate freezes computed + manual lines into lines_json.
     Approve enforces creator != approver (SoD, same rule as payroll runs).
+    Disburse (v3.4.1) requires a payment proof upload + reference.
+    Mark Paid (closure) requires the signed cancellation / EOS receipt.
     """
     __tablename__ = "final_settlements"
     id = db.Column(db.Integer, primary_key=True)
@@ -719,7 +723,7 @@ class FinalSettlement(db.Model):
     separation_type = db.Column(db.String(30), default="Resignation", nullable=False)
     reason = db.Column(db.Text)
     status = db.Column(db.String(20), default="draft", nullable=False)
-    # draft | calculated | approved | paid
+    # draft | calculated | approved | disbursed | paid
     notice_days = db.Column(db.Integer, default=0, nullable=False)
     notice_direction = db.Column(db.String(20), default="none", nullable=False)
     # company_pays | employee_pays | none
@@ -741,6 +745,13 @@ class FinalSettlement(db.Model):
     approved_at = db.Column(db.DateTime)
     paid_at = db.Column(db.DateTime)
     paid_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    # v3.4.1: disbursement split — approved -> disbursed -> paid.
+    # Gate 1 (disbursement): payment proof upload + reference.
+    # Gate 2 (closure): signed MOHRE cancellation / EOS receipt.
+    payment_doc_path = db.Column(db.String(120))
+    payment_ref = db.Column(db.String(80))
+    disbursed_at = db.Column(db.DateTime)
+    disbursed_by_id = db.Column(db.String(20), db.ForeignKey("users.id"))
 
     user = db.relationship("User", foreign_keys="FinalSettlement.user_id")
 
@@ -761,6 +772,9 @@ class FinalSettlement(db.Model):
 
     @property
     def is_overdue(self):
+        # v3.4.1: the overdue clock stops at disbursement — once the money
+        # is paid out, the Art. 53 deadline is met; only the receipt gate
+        # (closure) remains open.
         return (self.status in ("calculated", "approved")
                 and self.payment_due_date is not None
                 and date.today() > self.payment_due_date)
@@ -842,6 +856,9 @@ class PunchRecord(db.Model):
     location_id = db.Column(db.Integer, db.ForeignKey("work_locations.id"))
     distance_m = db.Column(db.Float)
     photo_path = db.Column(db.String(120))
+    # v3.4.1: low-accuracy GPS flag + legal hold (pauses the 45-day purge)
+    low_accuracy = db.Column(db.Boolean, default=False, nullable=False)
+    legal_hold = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     location = db.relationship("WorkLocation")
@@ -1034,6 +1051,9 @@ class JDAcknowledgement(db.Model):
     signature_path = db.Column(db.String(120))
     signer_ip = db.Column(db.String(45))
     typed_name = db.Column(db.String(120))
+    # v3.4.1: tamper evidence — hash of the exact text acknowledged + agent
+    jd_text_hash = db.Column(db.String(64))
+    user_agent = db.Column(db.String(255))
     __table_args__ = (db.UniqueConstraint("jd_id", "user_id"),)
 
     @property
@@ -1114,6 +1134,9 @@ class ApprovalInstance(db.Model):
     current_step = db.Column(db.Integer, default=1, nullable=False)
     status = db.Column(db.String(20), default="pending", nullable=False)
     # pending | approved | rejected
+    # v3.4.1: halted when the last step has no resolvers — only an admin
+    # (not subject/requester) may then decide the instance.
+    halted = db.Column(db.Boolean, default=False, nullable=False)
     reject_reason = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     decided_at = db.Column(db.DateTime)
@@ -1166,3 +1189,35 @@ class ApprovalAction(db.Model):
                                backref=db.backref("actions", lazy="dynamic",
                                                   order_by="ApprovalAction.id",
                                                   cascade="all, delete-orphan"))
+
+
+# ===================== HRMS+ESS V3.4.1 models =====================
+
+class ApprovalDelegation(db.Model):
+    """Temporary delegation of approval authority (v3.4.1).
+
+    When the delegator is a resolver of a step (person-specific
+    resolutions: reporting manager, skip-level manager, specific user, each
+    flagged HR Manager holder), the delegate is added as an additional
+    resolver while the delegation window is active. The original person
+    remains a resolver too. process_key NULL = all three processes.
+    """
+    __tablename__ = "approval_delegations"
+    id = db.Column(db.Integer, primary_key=True)
+    delegator_id = db.Column(db.String(20), db.ForeignKey("users.id"),
+                             nullable=False, index=True)
+    delegate_id = db.Column(db.String(20), db.ForeignKey("users.id"),
+                            nullable=False, index=True)
+    process_key = db.Column(db.String(40), index=True)
+    # employee_creation|leave|regularisation, NULL = all processes
+    starts_on = db.Column(db.Date, nullable=False)
+    ends_on = db.Column(db.Date, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow,
+                           nullable=False)
+
+    @property
+    def in_window(self):
+        today = datetime.utcnow().date()
+        return (self.is_active and self.starts_on <= today <= self.ends_on)

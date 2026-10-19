@@ -5,11 +5,11 @@
 <p class="muted">Answer all questions. Pass mark: {{ course.pass_percent }}%. You can retake.</p>
 <form method="post" class="formcard">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  {% for q in questions %}
+  {% for item in quiz_questions %}
   <div class="quiz-q">
-    <p><strong>Q{{ loop.index }}.</strong> {{ q.question | e }}</p>
-    {% for opt in q.options %}
-    <label class="quiz-opt"><input type="radio" name="q_{{ q.id }}" value="{{ loop.index0 }}" required> {{ opt | e }}</label>
+    <p><strong>Q{{ loop.index }}.</strong> {{ item.q.question | e }}</p>
+    {% for orig_idx, opt in item.opts %}
+    <label class="quiz-opt"><input type="radio" name="q_{{ item.q.id }}" value="{{ orig_idx }}" required> {{ opt | e }}</label>
     {% endfor %}
   </div>
   {% endfor %}

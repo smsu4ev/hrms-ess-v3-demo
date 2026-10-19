@@ -7,7 +7,7 @@
   <button class="btn small" type="submit">View</button>
 </form>
 <div class="tbl-wrap"><table class="tbl">
-  <tr><th>Employee</th><th>Type</th><th>Time (GST)</th><th>Location</th><th>Distance</th><th>Photo</th></tr>
+  <tr><th>Employee</th><th>Type</th><th>Time (GST)</th><th>Location</th><th>Distance</th><th>GPS</th><th>Photo</th>{% if current_user.is_admin %}<th>Legal Hold</th>{% endif %}</tr>
   {% for p in punches %}
   {% set u = users.get(p.user_id) %}
   <tr>
@@ -16,10 +16,21 @@
     <td>{{ p.punched_at|gst_time }}</td>
     <td>{{ p.location.name if p.location else 'Unrestricted' }}</td>
     <td>{{ ('%.0f m'|format(p.distance_m)) if p.distance_m is not none else '-' }}</td>
+    <td>{% if p.low_accuracy %}<span class="chip chip-warn">Low GPS accuracy</span>{% else %}<span class="muted">ok</span>{% endif %}</td>
     <td>{% if p.photo_path %}<a href="{{ url_for('engagement.punch_photo', pid=p.id) }}" target="_blank"><img src="{{ url_for('engagement.punch_photo', pid=p.id) }}" alt="selfie" style="width:64px;height:64px;object-fit:cover"></a>{% else %}<span class="muted">deleted</span>{% endif %}</td>
+    {% if current_user.is_admin %}
+    <td>
+      {% if p.legal_hold %}<span class="chip">On hold</span>{% endif %}
+      <form method="post" action="{{ url_for('engagement.punch_hold', pid=p.id) }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="{{ 'release' if p.legal_hold else 'hold' }}">
+        <button class="btn small {{ 'danger' if p.legal_hold else '' }}" type="submit">{{ 'Release' if p.legal_hold else 'Hold' }}</button>
+      </form>
+    </td>
+    {% endif %}
   </tr>
   {% else %}
-  <tr><td colspan="6" class="muted">No punches on this date.</td></tr>
+  <tr><td colspan="{{ 8 if current_user.is_admin else 7 }}" class="muted">No punches on this date.</td></tr>
   {% endfor %}
 </table></div>
 {% endblock %}

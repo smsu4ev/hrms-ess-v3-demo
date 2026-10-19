@@ -411,14 +411,40 @@ with app.app_context():
     st = FinalSettlement.query.get(sid)
     check("second admin approves", st.status == "approved"
           and st.approved_by == "T32-ADM2")
-# v3.2.1: Mark Paid is blocked until a signed MOHRE cancellation / EOS
-# receipt is uploaded (Art. 53 payment gate).
+# v3.4.1 two-gate design: payment proof at disbursement (gate 1), signed
+# MOHRE cancellation / EOS receipt at closure (gate 2). Mark Paid from
+# 'approved' is refused — the payment must be disbursed first.
 r = client.post(f"/hrms/settlements/{sid}/mark-paid",
                 data={"csrf_token": get_token(f"/hrms/settlements/{sid}")},
                 follow_redirects=False)
 with app.app_context():
     st = FinalSettlement.query.get(sid)
-    check("mark paid blocked without receipt", st.status == "approved")
+    check("mark paid blocked from approved", st.status == "approved")
+# gate 1: mark-disbursed without proof refused
+r = client.post(f"/hrms/settlements/{sid}/mark-disbursed",
+                data={"csrf_token": get_token(f"/hrms/settlements/{sid}"),
+                      "payment_ref": "TT-TEST-1"},
+                content_type="multipart/form-data", follow_redirects=False)
+with app.app_context():
+    st = FinalSettlement.query.get(sid)
+    check("disbursement blocked without proof", st.status == "approved")
+t = get_token(f"/hrms/settlements/{sid}")
+r = client.post(f"/hrms/settlements/{sid}/mark-disbursed",
+                data={"csrf_token": t, "payment_ref": "TT-TEST-1",
+                      "payment_proof": (io.BytesIO(b"%PDF-1.4 payment proof"),
+                                        "proof.pdf")},
+                content_type="multipart/form-data", follow_redirects=False)
+with app.app_context():
+    st = FinalSettlement.query.get(sid)
+    check("disbursed with proof + ref", st.status == "disbursed"
+          and st.payment_ref == "TT-TEST-1" and bool(st.payment_doc_path))
+# gate 2: mark paid blocked until the signed receipt is uploaded
+r = client.post(f"/hrms/settlements/{sid}/mark-paid",
+                data={"csrf_token": get_token(f"/hrms/settlements/{sid}")},
+                follow_redirects=False)
+with app.app_context():
+    st = FinalSettlement.query.get(sid)
+    check("mark paid blocked without receipt", st.status == "disbursed")
 t = get_token(f"/hrms/settlements/{sid}")
 r = client.post(f"/hrms/settlements/{sid}/receipt",
                 data={"csrf_token": t,

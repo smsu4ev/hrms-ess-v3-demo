@@ -152,8 +152,21 @@ def create_app():
                 ("is_hr_staff", "BOOLEAN"),      # v3.4 approval matrix
                 ("is_hr_manager", "BOOLEAN"),
                 ("pending_status", "VARCHAR(20)"),
+                ("share_celebrations", "BOOLEAN"),  # v3.4.1 celebration opt-out
             ]:
                 add_column("users", col, ddl)
+            add_column("punch_records", "low_accuracy", "BOOLEAN")  # v3.4.1
+            add_column("punch_records", "legal_hold", "BOOLEAN")    # v3.4.1
+            add_column("jd_acknowledgements", "jd_text_hash",
+                       "VARCHAR(64)")                             # v3.4.1
+            add_column("jd_acknowledgements", "user_agent",
+                       "VARCHAR(255)")                            # v3.4.1
+            add_column("approval_instances", "halted", "BOOLEAN")  # v3.4.1
+            add_column("final_settlements", "payment_doc_path",
+                       "VARCHAR(120)")                            # v3.4.1
+            add_column("final_settlements", "payment_ref", "VARCHAR(80)")
+            add_column("final_settlements", "disbursed_at", "DATETIME")
+            add_column("final_settlements", "disbursed_by_id", "VARCHAR(20)")
             add_column("generated_letters", "has_salary_data", "BOOLEAN")
             # v3.2.1: settlement due-date/receipt/ticket fields + outdoor flag
             add_column("final_settlements", "unpaid_days_used", "FLOAT")
@@ -165,6 +178,9 @@ def create_app():
             # New table for idempotent loan recovery (checkfirst = no-op if present).
             from app.models import PayrollLoanRecovery
             PayrollLoanRecovery.__table__.create(db.engine, checkfirst=True)
+            # v3.4.1: approval delegations (checkfirst = no-op if present).
+            from app.models import ApprovalDelegation
+            ApprovalDelegation.__table__.create(db.engine, checkfirst=True)
             db.session.commit()
         except Exception:
             app.logger.exception("Column migration failed")
@@ -183,7 +199,7 @@ def create_app():
             import os as _os
             root = upload_root()
             for sub in ("punches", "training", "signatures",
-                        "settlement_receipts"):
+                        "settlement_receipts", "settlement_payments"):
                 _os.makedirs(_os.path.join(root, sub), exist_ok=True)
         except Exception:
             app.logger.exception("Upload folder setup failed")

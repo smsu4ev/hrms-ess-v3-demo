@@ -223,7 +223,9 @@ with app.app_context():
     check("future-LWD settlement NOT overdue",
           not st.is_overdue and st.payment_due_date == LWD_FUT + timedelta(days=14))
 
-# ================= 4. receipt gate before Mark Paid =====================
+# ================= 4. two-gate flow: disbursement then Mark Paid =========
+# v3.4.1: approved -> disbursed (gate 1: payment proof + ref) ->
+# paid (gate 2: signed MOHRE cancellation / EOS receipt).
 # approve sid1 as a different admin (SoD)
 logout()
 login("T21-ADM2", "pw-T21-ADM2")
@@ -233,12 +235,42 @@ r = client.post(f"/hrms/settlements/{sid1}/approve",
 with app.app_context():
     st = FinalSettlement.query.get(sid1)
     check("second admin approved", st.status == "approved")
+# gate 1: mark-paid from approved refused
 r = client.post(f"/hrms/settlements/{sid1}/mark-paid",
                 data={"csrf_token": get_token(f"/hrms/settlements/{sid1}")},
                 follow_redirects=False)
 with app.app_context():
     st = FinalSettlement.query.get(sid1)
-    check("mark-paid blocked without receipt", st.status == "approved")
+    check("mark-paid blocked from approved", st.status == "approved")
+# mark-disbursed without proof refused
+r = client.post(f"/hrms/settlements/{sid1}/mark-disbursed",
+                data={"csrf_token": get_token(f"/hrms/settlements/{sid1}"),
+                      "payment_ref": "TT-321"},
+                content_type="multipart/form-data", follow_redirects=False)
+with app.app_context():
+    st = FinalSettlement.query.get(sid1)
+    check("disbursement blocked without proof", st.status == "approved")
+t = get_token(f"/hrms/settlements/{sid1}")
+r = client.post(f"/hrms/settlements/{sid1}/mark-disbursed",
+                data={"csrf_token": t, "payment_ref": "TT-321",
+                      "payment_proof": (io.BytesIO(b"%PDF-1.4 wps advice"),
+                                        "proof.pdf")},
+                content_type="multipart/form-data", follow_redirects=False)
+with app.app_context():
+    st = FinalSettlement.query.get(sid1)
+    check("disbursed: proof + ref stored, overdue cleared",
+          st.status == "disbursed" and st.payment_ref == "TT-321"
+          and bool(st.payment_doc_path) and not st.is_overdue)
+r = client.get(f"/hrms/settlements/{sid1}/payment-proof")
+check("payment proof viewable by admin (200 pdf)",
+      r.status_code == 200 and r.headers.get("Content-Type") == "application/pdf")
+# gate 2: mark-paid blocked until the signed receipt is uploaded
+r = client.post(f"/hrms/settlements/{sid1}/mark-paid",
+                data={"csrf_token": get_token(f"/hrms/settlements/{sid1}")},
+                follow_redirects=False)
+with app.app_context():
+    st = FinalSettlement.query.get(sid1)
+    check("mark-paid blocked without receipt", st.status == "disbursed")
 r = client.get(f"/hrms/settlements/{sid1}")
 check("block reason flashed", b"signed MOHRE cancellation" in r.data)
 

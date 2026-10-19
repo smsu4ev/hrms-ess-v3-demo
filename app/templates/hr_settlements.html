@@ -18,7 +18,7 @@
     <td>{{ st.payment_due_date.isoformat() if st.payment_due_date else '' }}
         {% if st.is_overdue %}<br><span class="chip chip-warn">OVERDUE</span>{% endif %}</td>
     <td><span class="chip">{{ st.status }}</span></td>
-    <td>{% if st.status in ('calculated','approved','paid') %}{{ '%.2f'|format(st.net) }}{% if st.net < 0 %}<br><span class="chip chip-warn">Recovery required</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td>{% if st.status in ('calculated','approved','disbursed','paid') %}{{ '%.2f'|format(st.net) }}{% if st.net < 0 %}<br><span class="chip chip-warn">Recovery required</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
     <td>{{ st.created_by or '' }}</td>
     <td><a class="btn small" href="{{ url_for('settlement.detail', sid=st.id) }}">Open</a></td>
   </tr>

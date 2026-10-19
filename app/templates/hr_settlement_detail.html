@@ -8,10 +8,11 @@
    {% if st.payment_due_date %}&middot; Payable by <strong>{{ st.payment_due_date.isoformat() }}</strong>
    (14 days from last working day — Art. 53){% endif %}
    {% if st.is_overdue %}<span class="chip chip-warn">OVERDUE</span>{% endif %}
-   {% if st.status in ('calculated','approved','paid') and st.net < 0 %}<span class="chip chip-warn">Recovery required</span>{% endif %}</p>
+   {% if st.status in ('calculated','approved','disbursed','paid') and st.net < 0 %}<span class="chip chip-warn">Recovery required</span>{% endif %}
+   {% if st.disbursed_at %}&middot; Disbursed {{ st.disbursed_at.strftime('%Y-%m-%d') }} (ref: {{ st.payment_ref or '—' }}){% endif %}</p>
 {% if st.reason %}<p class="muted">Reason: {{ st.reason }}</p>{% endif %}
 
-{% if st.status in ('calculated','approved','paid') %}
+{% if st.status in ('calculated','approved','disbursed','paid') %}
 <div class="stmt">
   <div class="stmt-head">
     <h3>{{ company_name }}</h3>
@@ -43,6 +44,7 @@
   </table>
   <p class="muted">Prepared by: {{ st.created_by or '' }}
      {% if st.approved_by %}&middot; Approved by: {{ st.approved_by }} on {{ st.approved_at.strftime('%Y-%m-%d') if st.approved_at else '' }}{% endif %}
+     {% if st.disbursed_at %}&middot; Disbursed on {{ st.disbursed_at.strftime('%Y-%m-%d') }} (ref {{ st.payment_ref or '—' }}){% endif %}
      {% if st.paid_at %}&middot; Paid on {{ st.paid_at.strftime('%Y-%m-%d') }}{% endif %}</p>
   <p style="margin-top:30px">Employee Signature: ____________________&nbsp;&nbsp;&nbsp;HR Manager: ____________________</p>
   <p><button class="btn" onclick="window.print()">Print Statement</button></p>
@@ -104,6 +106,26 @@
   </form>
   <p class="muted">Note: the settlement creator cannot approve their own settlement (segregation of duties).</p>
   {% elif st.status == 'approved' %}
+  <div class="formcard">
+    <h3>Mark Disbursed — payment proof (gate 1)</h3>
+    <p class="muted">Disbursement records the actual payout. The Art. 53 overdue clock stops here.
+       The signed MOHRE cancellation / EOS receipt still gates final closure.</p>
+    <form method="post" action="{{ url_for('settlement.mark_disbursed', sid=st.id) }}" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Payment reference (e.g. bank transfer / WPS batch ref) * <input type="text" name="payment_ref" maxlength="80" required placeholder="e.g. TT-2026-1184"></label>
+      <label>Payment proof (PDF, JPG or PNG — bank transfer advice, WPS confirmation, cheque copy) * <input type="file" name="payment_proof" accept=".pdf,.jpg,.jpeg,.png" required></label>
+      <button class="btn primary" type="submit" onsubmit="return confirm('Mark this settlement as disbursed?')">Mark Disbursed</button>
+    </form>
+  </div>
+  {% elif st.status == 'disbursed' %}
+  <div class="formcard">
+    <h3>Payment proof</h3>
+    <p>Reference: <strong>{{ st.payment_ref or '—' }}</strong> &middot;
+       Disbursed: {{ st.disbursed_at.strftime('%Y-%m-%d') if st.disbursed_at else '—' }}</p>
+    {% if st.payment_doc_path %}
+    <p><a class="btn" href="{{ url_for('settlement.view_payment', sid=st.id) }}" target="_blank">View payment proof</a></p>
+    {% endif %}
+  </div>
   <div class="formcard">
     <h3>Signed cancellation receipt (required before Mark Paid)</h3>
     {% if st.cancellation_doc_path %}

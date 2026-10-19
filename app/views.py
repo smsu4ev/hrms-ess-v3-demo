@@ -114,10 +114,23 @@ def leave():
                 days = (e - s).days + 1
                 bal = LeaveBalance.query.filter_by(
                     user_id=current_user.id, leave_type=ltype).first()
-                entitled = app_config.LEAVE_TYPES[ltype]["entitled"]
+                cfg_entitled = app_config.LEAVE_TYPES[ltype]["entitled"]
+                # v3.4.1: the employee's own balance row is authoritative
+                # when present (pro-rated entitlements), else the config.
+                entitled = (bal.entitled if bal and bal.entitled is not None
+                            else cfg_entitled)
                 used = bal.used if bal else 0
-                if entitled > 0 and used + days > entitled:
-                    flash(f"Insufficient {app_config.LEAVE_TYPES[ltype]['label']} balance.", "error")
+                # v3.4.1: pending requests of the same type count against
+                # the balance, so two pending requests cannot together
+                # exceed the entitlement (double-spend guard).
+                pending_days = sum(
+                    r.days for r in LeaveRequest.query.filter_by(
+                        user_id=current_user.id, leave_type=ltype,
+                        status="pending").all())
+                if entitled > 0 and used + pending_days + days > entitled:
+                    flash(f"Insufficient {app_config.LEAVE_TYPES[ltype]['label']} balance "
+                          f"(used {used}, {pending_days} day(s) pending approval).",
+                          "error")
                 else:
                     req = LeaveRequest(user_id=current_user.id, leave_type=ltype,
                                        start_date=s, end_date=e, days=days, reason=reason)
@@ -282,6 +295,19 @@ def profile():
     return render_template("profile.html", gratuity_est=est, my_certs=my_certs,
                            my_ppe=my_ppe, my_deps=my_deps, my_assets=my_assets,
                            dep_projects=dep_projects)
+
+
+@views_bp.route("/profile/celebrations", methods=["POST"])
+@login_required
+def profile_celebrations():
+    """v3.4.1: employee toggles birthday/anniversary feed sharing."""
+    share = request.form.get("share_celebrations") == "on"
+    current_user.share_celebrations = share
+    log_action(current_user.id, "celebration_pref_updated",
+               f"share_celebrations={share}")
+    db.session.commit()
+    flash("Celebration feed preference saved.", "success")
+    return redirect(url_for("views.profile"))
 
 
 # ---------------- My End-of-Service Estimate (employee) ----------------
@@ -450,7 +476,7 @@ def _leave_reject_side_effects(req, comment):
 @login_required
 @approver_required
 def decide_leave(req_id):
-    from app.approvals import get_or_start_instance, act
+    from app.approvals import get_or_start_instance, act, self_blocked
     req = LeaveRequest.query.get_or_404(req_id)
     if req.status != "pending":
         flash("Request already decided.", "error")
@@ -461,9 +487,29 @@ def decide_leave(req_id):
     comment = (request.form.get("comment") or "").strip()[:500]
     if action not in ("approve", "reject"):
         abort(400)
+    # v3.4.1: re-validate the balance at the FINAL step before the chain
+    # advances — a request must never overdraw, even if earlier steps were
+    # approved while the balance was still intact.
+    if action == "approve" and instance.current_step == instance.total_steps \
+            and not instance.exhausted:
+        bal = LeaveBalance.query.filter_by(
+            user_id=req.user_id, leave_type=req.leave_type).first()
+        cfg_entitled = app_config.LEAVE_TYPES.get(req.leave_type, {}).get(
+            "entitled", 0)
+        entitled = (bal.entitled if bal and bal.entitled is not None
+                    else cfg_entitled)
+        used = bal.used if bal else 0
+        if entitled > 0 and used + req.days > entitled:
+            flash("Insufficient remaining balance — request stays pending.",
+                  "error")
+            return redirect(url_for("views.approvals"))
     try:
         outcome = act(instance, current_user, action == "approve", comment)
-    except PermissionError:
+    except PermissionError as e:
+        if self_blocked(instance, current_user) and \
+                "own request" in str(e):
+            flash("You cannot approve your own request.", "error")
+            return redirect(url_for("views.approvals"))
         abort(403)
     if outcome == "rejected":
         _leave_reject_side_effects(req, comment)
@@ -611,7 +657,7 @@ def regularisation():
 def regularisation_approvals():
     """Matrix-driven approval list for regularisation requests (v3.4)."""
     from app.approvals import (get_or_start_instance, act, can_act,
-                               step_badge)
+                               step_badge, self_blocked)
     q = RegularisationRequest.query.filter_by(status="pending")
     if request.method == "POST":
         rid = int(request.form.get("rid", 0))
@@ -628,7 +674,11 @@ def regularisation_approvals():
         try:
             outcome = act(instance, current_user, action == "approve",
                           comment)
-        except PermissionError:
+        except PermissionError as e:
+            if self_blocked(instance, current_user) and \
+                    "own request" in str(e):
+                flash("You cannot approve your own request.", "error")
+                return redirect(url_for("views.regularisation_approvals"))
             abort(403)
         if outcome == "rejected":
             rr.status = "rejected"

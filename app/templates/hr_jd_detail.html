@@ -58,7 +58,7 @@
 </table></div>
 <h3>All assignments ({{ acks|length }})</h3>
 <div class="tbl-wrap"><table class="tbl">
-  <tr><th>Employee</th><th>Status</th><th>Version</th><th>Acknowledged at</th></tr>
+  <tr><th>Employee</th><th>Status</th><th>Version</th><th>Acknowledged at</th><th>Content hash</th></tr>
   {% for a in acks %}
   {% set u = users.get(a.user_id) %}
   <tr>
@@ -66,6 +66,7 @@
     <td><span class="badge {{ 'approved' if a.status == 'acknowledged' else 'pending' }}">{{ a.status }}</span></td>
     <td>v{{ a.jd_version }}</td>
     <td>{{ a.acknowledged_at.strftime('%d %b %Y') if a.acknowledged_at else '-' }}</td>
+    <td title="{{ a.jd_text_hash or '' }}">{{ (a.jd_text_hash[:12] + '…') if a.jd_text_hash else '-' }}</td>
   </tr>
   {% endfor %}
 </table></div>

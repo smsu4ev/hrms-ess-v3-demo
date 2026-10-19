@@ -26,14 +26,15 @@ resolvers there by definition), and admins alone may decide instances
 whose steps are all exhausted.
 """
 import json
-from datetime import datetime
+from datetime import datetime, date
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
 
 from app import db
 from app.models import (User, ApprovalMatrix, ApprovalStep, ApprovalInstance,
-                        ApprovalAction, APPROVAL_PROCESSES, APPROVER_TYPES)
+                        ApprovalAction, ApprovalDelegation,
+                        APPROVAL_PROCESSES, APPROVER_TYPES)
 from app.auth import log_action
 from app.audit import record
 
@@ -107,20 +108,33 @@ def _active(ids):
             if u and u.is_active]
 
 
-def resolve_step_users(step, subject_user):
-    """Return (user_ids, label) for one step definition.
+def _active_delegations_for(delegator_id, process_key):
+    """Delegation rows where `delegator_id` granted authority covering
+    today and this process (None = all processes)."""
+    today = date.today()
+    return [d for d in ApprovalDelegation.query.filter_by(
+                delegator_id=delegator_id, is_active=True).all()
+            if d.starts_on <= today <= d.ends_on
+            and d.process_key in (None, process_key)]
 
-    step: dict with approver_type / approver_user_id (from the instance
-    snapshot or the live matrix).
+
+def _resolve_base(step, subject_user):
+    """Resolve a step definition WITHOUT delegation.
+
+    Returns (users [User], label, person_ids): person_ids are the
+    person-specific resolvers (reporting/skip-level managers, flagged HR
+    managers, the specific user) whose delegations add extra resolvers.
+    Pool types (hr_staff, admin) and pool fallbacks carry no delegation.
     """
     atype = step.get("approver_type")
-    users, label = [], APPROVER_TYPE_LABELS.get(atype, atype)
+    users, label, persons = [], APPROVER_TYPE_LABELS.get(atype, atype), []
     if subject_user is None:
-        return users, label
+        return users, label, persons
     if atype == "reporting_manager":
         mgr = User.query.get(subject_user.reporting_manager) \
             if subject_user.reporting_manager else None
         users = _active([mgr])
+        persons = [u.id for u in users]
         if not users and subject_user.department:
             # Legacy fallback: when no reporting manager is assigned, the
             # active managers/admins of the employee's own department act as
@@ -129,6 +143,7 @@ def resolve_step_users(step, subject_user):
                 User.department == subject_user.department,
                 User.role.in_(("manager", "admin")),
                 User.is_active.is_(True)).all()
+            persons = [u.id for u in users]
             if users:
                 label = "Reporting Manager (department managers)"
     elif atype == "skip_level_manager":
@@ -137,12 +152,14 @@ def resolve_step_users(step, subject_user):
         skip = User.query.get(mgr.reporting_manager) \
             if mgr and mgr.reporting_manager else None
         users = _active([skip])
+        persons = [u.id for u in users]
     elif atype == "hr_staff":
         users = User.query.filter_by(is_hr_staff=True,
                                      is_active=True).all()
     elif atype == "hr_manager":
         users = User.query.filter_by(is_hr_manager=True,
                                      is_active=True).all()
+        persons = [u.id for u in users]
         if not users:  # fallback so the chain never deadlocks
             users = User.query.filter_by(role="admin",
                                          is_active=True).all()
@@ -153,8 +170,34 @@ def resolve_step_users(step, subject_user):
         target = User.query.get(step.get("approver_user_id")) \
             if step.get("approver_user_id") else None
         users = _active([target])
+        persons = [u.id for u in users]
         if target:
             label = f"{target.name} ({target.id})"
+    return users, label, persons
+
+
+def resolve_step_users(step, subject_user, process_key=None):
+    """Return (user_ids, label) for one step definition.
+
+    step: dict with approver_type / approver_user_id (from the instance
+    snapshot or the live matrix). When process_key is given, active
+    delegations of the person-specific resolvers are added as additional
+    resolvers (the original person stays a resolver).
+    """
+    users, label, persons = _resolve_base(step, subject_user)
+    if process_key is not None and persons:
+        seen = {u.id for u in users}
+        extra_ids = []
+        for pid in persons:
+            for d in _active_delegations_for(pid, process_key):
+                if d.delegate_id not in seen:
+                    extra_ids.append(d.delegate_id)
+                    seen.add(d.delegate_id)
+        if extra_ids:
+            extra = User.query.filter(
+                User.id.in_(extra_ids),
+                User.is_active.is_(True)).all()
+            users = users + extra
     return [u.id for u in users], label
 
 
@@ -171,12 +214,37 @@ def _notify(user_ids, title, body, link):
 
 
 def _auto_skip_empty(instance):
-    """Advance past steps with no resolvers, recording auto_skip."""
+    """Advance past steps with no resolvers, recording auto_skip.
+
+    The LAST step of a chain is never skipped: if it has no resolvers the
+    instance halts instead, and only an admin (not subject/requester) may
+    then decide it.
+    """
     while not instance.exhausted:
         step = instance.current_step_def
         subject = User.query.get(instance.subject_user_id)
-        resolvers, _ = resolve_step_users(step, subject)
+        resolvers, _ = resolve_step_users(step, subject,
+                                          instance.process_key)
         if resolvers:
+            break
+        if instance.current_step >= instance.total_steps:
+            instance.halted = True
+            db.session.add(ApprovalAction(
+                instance_id=instance.id, step_no=instance.current_step,
+                actor_id=None, action="halted",
+                comment="Final step has no eligible approver; routing "
+                        "halted."))
+            record("approval_halted",
+                   f"{instance.process_key} #{instance.ref_id} halted at "
+                   f"final step {instance.current_step} (no resolver)",
+                   entity="approval", entity_id=instance.id)
+            _notify([u.id for u in User.query.filter_by(
+                role="admin", is_active=True).all()],
+                "Approval routing halted",
+                f"{instance.process_label} #{instance.ref_id} cannot be "
+                f"routed — its final step has no eligible approver. "
+                f"An admin must decide it.",
+                _instance_link(instance))
             break
         db.session.add(ApprovalAction(
             instance_id=instance.id, step_no=instance.current_step,
@@ -207,7 +275,8 @@ def start_instance(process_key, ref_id, subject_user_id, requester_id):
     if not instance.exhausted:
         subject = User.query.get(subject_user_id)
         step = instance.current_step_def
-        resolvers, label = resolve_step_users(step, subject)
+        resolvers, label = resolve_step_users(step, subject,
+                                              instance.process_key)
         _notify(resolvers,
                 f"Approval needed: {instance.process_label}",
                 f"{subject.name if subject else subject_user_id} — "
@@ -237,21 +306,36 @@ def current_resolvers(instance):
         return []
     step = instance.current_step_def
     subject = User.query.get(instance.subject_user_id)
-    resolvers, _ = resolve_step_users(step, subject)
+    resolvers, _ = resolve_step_users(step, subject, instance.process_key)
     return resolvers
+
+
+def self_blocked(instance, actor):
+    """True when the actor is the request's subject or requester: they can
+    never approve their own request, on any path including the admin
+    backstop."""
+    if actor is None:
+        return True
+    return (actor.id == instance.subject_user_id
+            or (instance.requester_id
+                and actor.id == instance.requester_id))
 
 
 def can_act(instance, actor):
     if instance.status != "pending":
         return False
+    if self_blocked(instance, actor):
+        return False
     if actor.id in current_resolvers(instance):
         return True
     if actor.is_admin:
         # Admin backstops: hr_manager/admin steps (admins resolve there by
-        # definition) and fully auto-skipped chains.
-        step = instance.current_step_def
+        # definition), fully auto-skipped chains, and halted instances.
         if instance.exhausted:
             return True
+        if getattr(instance, "halted", False):
+            return True
+        step = instance.current_step_def
         return bool(step and step.get("approver_type") in ("hr_manager",
                                                            "admin"))
     return False
@@ -265,19 +349,72 @@ def _instance_link(instance):
     return "/approvals"
 
 
+def _maybe_record_delegated(instance, step, subject, actor):
+    """Audit note when the actor resolved the step only via delegation."""
+    base_users, _label, _persons = _resolve_base(step, subject)
+    base_ids = [u.id for u in base_users]
+    if actor.id in base_ids:
+        return
+    today = date.today()
+    deleg = (ApprovalDelegation.query
+             .filter(ApprovalDelegation.delegate_id == actor.id,
+                     ApprovalDelegation.delegator_id.in_(base_ids),
+                     ApprovalDelegation.is_active.is_(True),
+                     ApprovalDelegation.starts_on <= today,
+                     ApprovalDelegation.ends_on >= today)
+             .filter(db.or_(ApprovalDelegation.process_key.is_(None),
+                           ApprovalDelegation.process_key
+                           == instance.process_key))
+             .first())
+    if deleg:
+        record("approval_delegated_action",
+               f"{instance.process_key} #{instance.ref_id} step "
+               f"{instance.current_step}: {actor.id} acting as delegate for "
+               f"{deleg.delegator_id} (delegation #{deleg.id})",
+               entity="approval", entity_id=instance.id)
+
+
+def _previous_human_action(instance):
+    return (ApprovalAction.query
+            .filter_by(instance_id=instance.id)
+            .filter(ApprovalAction.action.in_(("approve", "reject")),
+                    ApprovalAction.actor_id.isnot(None))
+            .order_by(ApprovalAction.id.desc()).first())
+
+
 def act(instance, actor, approve, comment=""):
     """Record an approve/reject on the current step.
 
     Returns "advanced" | "final_approved" | "rejected".
     Raises PermissionError when the actor may not decide.
     """
+    if self_blocked(instance, actor):
+        raise PermissionError("You cannot approve your own request.")
     if not can_act(instance, actor):
         raise PermissionError("You are not an approver for this step.")
-    comment = (comment or "").strip()[:500]
+    comment = (comment or "").strip()
+    step = instance.current_step_def
+    subject = User.query.get(instance.subject_user_id)
+    if approve:
+        # Consecutive-step rule: the same person cannot decide two steps
+        # in a row unless nobody else can resolve the current step.
+        prev = _previous_human_action(instance)
+        if prev is not None and prev.actor_id == actor.id:
+            resolvers, _ = resolve_step_users(step, subject,
+                                              instance.process_key)
+            if any(uid != actor.id for uid in resolvers):
+                raise PermissionError(
+                    "You acted on the previous step; a different approver "
+                    "is required for this step.")
+            if comment:
+                comment += " "
+            comment += "[sole resolver \u2014 consecutive step]"
+    comment = comment[:500]
     if not approve:
         db.session.add(ApprovalAction(
             instance_id=instance.id, step_no=instance.current_step,
             actor_id=actor.id, action="reject", comment=comment))
+        _maybe_record_delegated(instance, step, subject, actor)
         instance.status = "rejected"
         instance.decided_at = datetime.utcnow()
         instance.reject_reason = comment or None
@@ -300,6 +437,7 @@ def act(instance, actor, approve, comment=""):
     db.session.add(ApprovalAction(
         instance_id=instance.id, step_no=instance.current_step,
         actor_id=actor.id, action="approve", comment=comment))
+    _maybe_record_delegated(instance, step, subject, actor)
     log_action(actor.id, "approval_approved",
                f"{instance.process_key} #{instance.ref_id} step "
                f"{instance.current_step}")
@@ -321,7 +459,8 @@ def act(instance, actor, approve, comment=""):
         return "final_approved"
     subject = User.query.get(instance.subject_user_id)
     step = instance.current_step_def
-    resolvers, label = resolve_step_users(step, subject)
+    resolvers, label = resolve_step_users(step, subject,
+                                          instance.process_key)
     _notify(resolvers,
             f"Approval needed: {instance.process_label}",
             f"{subject.name if subject else instance.subject_user_id} — "
@@ -401,6 +540,55 @@ def _preview_for_type(atype):
 def matrix_admin():
     if request.method == "POST":
         action = request.form.get("action")
+        # ---- v3.4.1: approval delegations ----
+        if action == "add_delegation":
+            delegator = (request.form.get("delegator_id") or "").strip()
+            delegate = (request.form.get("delegate_id") or "").strip()
+            pkey = (request.form.get("d_process_key") or "").strip() or None
+            s_raw, e_raw = request.form.get("starts_on", ""), request.form.get(
+                "ends_on", "")
+            if pkey and pkey not in PROCESS_LABELS:
+                flash("Invalid process for delegation.", "error")
+            elif delegator == delegate or not delegator or not delegate:
+                flash("Delegator and delegate must be two different users.",
+                      "error")
+            elif not User.query.get(delegator) \
+                    or not (User.query.get(delegate)
+                            and User.query.get(delegate).is_active):
+                flash("Delegator and delegate must be active users.", "error")
+            else:
+                try:
+                    s = datetime.strptime(s_raw, "%Y-%m-%d").date()
+                    e = datetime.strptime(e_raw, "%Y-%m-%d").date()
+                except ValueError:
+                    s = e = None
+                if not s or not e or e < s:
+                    flash("Invalid delegation date window.", "error")
+                else:
+                    db.session.add(ApprovalDelegation(
+                        delegator_id=delegator, delegate_id=delegate,
+                        process_key=pkey, starts_on=s, ends_on=e,
+                        is_active=True, created_by=current_user.id))
+                    db.session.commit()
+                    record("approval_delegation_added",
+                           f"{delegator} -> {delegate} "
+                           f"({pkey or 'all processes'}) {s} to {e}",
+                           entity="approval_delegation")
+                    flash("Delegation added.", "success")
+            return redirect(url_for("approvals.matrix_admin"))
+        if action == "deactivate_delegation":
+            d = ApprovalDelegation.query.get(
+                int(request.form.get("delegation_id", 0)))
+            if not d:
+                abort(404)
+            d.is_active = False
+            record("approval_delegation_removed",
+                   f"delegation #{d.id} {d.delegator_id} -> {d.delegate_id} "
+                   f"deactivated",
+                   entity="approval_delegation", entity_id=d.id)
+            db.session.commit()
+            flash("Delegation deactivated.", "success")
+            return redirect(url_for("approvals.matrix_admin"))
         process_key = request.form.get("process_key", "")
         matrix = ApprovalMatrix.query.filter_by(
             process_key=process_key).first()
@@ -491,5 +679,12 @@ def matrix_admin():
         matrices.append({"key": process_key, "label": label,
                          "matrix": matrix, "steps": step_views})
     all_users = User.query.filter_by(is_active=True).order_by(User.name).all()
+    # v3.4.1: delegations
+    delegations = ApprovalDelegation.query\
+        .order_by(ApprovalDelegation.is_active.desc(),
+                  ApprovalDelegation.ends_on.desc()).all()
+    deleg_users = {u.id: u for u in User.query.all()}
     return render_template("hr_approval_matrix.html", matrices=matrices,
-                           approver_types=APPROVER_TYPES, users=all_users)
+                           approver_types=APPROVER_TYPES, users=all_users,
+                           delegations=delegations, deleg_users=deleg_users,
+                           processes=APPROVAL_PROCESSES)

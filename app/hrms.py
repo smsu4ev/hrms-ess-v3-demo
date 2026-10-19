@@ -260,7 +260,7 @@ def employee_review(uid):
     resolvers. Approving activates the record with the intended status.
     """
     from app.approvals import (get_instance, can_act, act, current_resolvers,
-                               step_badge)
+                               step_badge, self_blocked)
     user = User.query.get_or_404(uid)
     instance = get_instance("employee_creation", uid)
     if instance is None:
@@ -286,7 +286,11 @@ def employee_review(uid):
             abort(400)
         try:
             outcome = act(instance, current_user, action == "approve", comment)
-        except PermissionError:
+        except PermissionError as e:
+            if self_blocked(instance, current_user) and \
+                    "own request" in str(e):
+                flash("You cannot approve your own request.", "error")
+                return redirect(url_for("hrms.employee_review", uid=uid))
             abort(403)
         if outcome == "final_approved":
             user.employment_status = user.pending_status or "probation"

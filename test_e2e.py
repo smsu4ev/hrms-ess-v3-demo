@@ -116,10 +116,25 @@ with app.app_context():
 r = client.get("/approvals")
 check("approvals page (admin)", r.status_code == 200 and b"Pending Leave Approvals" in r.data)
 
-# 12. Approve the leave as admin
+# 12. Approve the leave as a different approver.
+# v3.4.1: self-approval is forbidden — the admin cannot approve their own
+# leave request. Assign a reporting manager and approve as them.
+with app.app_context():
+    mgr = User(id="E2E-MGR", name="E2E Manager", role="manager",
+               department="HR", employment_status="active", is_active=True,
+               joining_date=date(2020, 1, 1))
+    mgr.set_password("pw-E2E-MGR")
+    mgr.must_change_password = False
+    db.session.add(mgr)
+    User.query.get("AA670").reporting_manager = "E2E-MGR"
+    db.session.commit()
+r = client.post("/logout", data={"csrf_token": csrf_token(client.get("/change-password"))})
+r = client.get("/login"); t = csrf_token(r)
+client.post("/login", data={"username": "E2E-MGR", "password": "pw-E2E-MGR",
+                             "csrf_token": t}, follow_redirects=False)
 with app.app_context():
     lr = LeaveRequest.query.filter_by(user_id="AA670", status="pending").first()
-t = csrf_token(r)
+r = client.get("/approvals"); t = csrf_token(r)
 r = client.post(f"/approvals/{lr.id}", data={"action": "approve", "comment": "ok", "csrf_token": t},
                 follow_redirects=True)
 check("leave approved", b"approved" in r.data)
@@ -127,6 +142,9 @@ with app.app_context():
     from app.models import LeaveBalance
     bal = LeaveBalance.query.filter_by(user_id="AA670", leave_type="annual").first()
 check("balance deducted", bal.used == 3, bal.used)
+# back to the admin for the remaining admin-only steps
+client.post("/logout", data={"csrf_token": csrf_token(client.get("/change-password"))})
+r = login("AA670", "StrongPass1")
 
 # 13. Evaluation create (admin)
 r = client.get("/evaluations/new/AA670")
