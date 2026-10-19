@@ -8,10 +8,10 @@
     else { document.addEventListener("DOMContentLoaded", fn); }
   }
 
-  /* ---------- mobile drawer (v2.1) ---------- */
+  /* ---------- mobile drawer (v3.6: workspace sidebar) ---------- */
   function initDrawer() {
     var toggle = document.getElementById("navToggle");
-    var sidebar = document.getElementById("sidebar");
+    var sidebar = document.getElementById("ws-sidebar");
     var scrim = document.getElementById("navScrim");
     if (!toggle || !sidebar) { return; }
     function openNav() {
@@ -144,66 +144,33 @@
     }
   }
 
+  /* Active-link highlight across the v3.6 desk shell: workspace sidebar
+     links match by exact path; rail icons match the current workspace key
+     (body data-ws) since workspace home routes differ from deep pages. */
   function markActiveNav(url) {
     try {
       var path = new URL(url, window.location.origin).pathname;
-      var links = document.querySelectorAll("#sidebar a");
+      var links = document.querySelectorAll("#ws-sidebar a, .rail a, .bottomnav a");
+      var ws = document.body ? document.body.getAttribute("data-ws") : null;
       for (var i = 0; i < links.length; i++) {
+        var a = links[i];
+        if (a.classList.contains("rail-item") && a.getAttribute("data-ws")) {
+          a.classList.toggle("active", ws && a.getAttribute("data-ws") === ws);
+          continue;
+        }
         var lp;
-        try { lp = new URL(links[i].getAttribute("href"), window.location.origin).pathname; }
+        try { lp = new URL(a.getAttribute("href"), window.location.origin).pathname; }
         catch (e) { continue; }
-        if (lp === path) { links[i].classList.add("active"); }
-        else { links[i].classList.remove("active"); }
+        if (lp === path) { a.classList.add("active"); }
+        else { a.classList.remove("active"); }
       }
     } catch (e) { /* non-fatal */ }
   }
 
-  /* ---------- collapsible nav groups (v3.6) ----------
-     Expansion triggers compose as: (1) click toggles .open on the group
-     (touch/mobile + pinned-open on desktop); (2) pure-CSS hover/focus-within
-     expands on desktop (hover:hover, min-width 861px); (3) the group holding
-     the current page's active link carries .has-active and stays expanded.
-     Mobile drawer (<=860px): tap toggles; opening one group collapses the
-     others, except a group with .has-active keeps its state. Delegated on
-     document so it survives PJAX; re-synced after every swap. */
-  function syncNavGroups() {
-    var groups = document.querySelectorAll(".navgroup");
-    for (var i = 0; i < groups.length; i++) {
-      var g = groups[i];
-      if (g.querySelector("a.active")) { g.classList.add("has-active"); }
-      else { g.classList.remove("has-active"); }
-      var head = g.querySelector(".navgroup-head");
-      if (head) {
-        var expanded = g.classList.contains("open") || g.classList.contains("has-active");
-        head.setAttribute("aria-expanded", expanded ? "true" : "false");
-      }
-    }
-  }
-
-  function initNavGroups() {
-    document.addEventListener("click", function (e) {
-      var head = e.target.closest ? e.target.closest(".navgroup-head") : null;
-      if (!head) { return; }
-      e.preventDefault();
-      var group = head.closest(".navgroup");
-      if (!group) { return; }
-      var willOpen = !group.classList.contains("open");
-      group.classList.toggle("open", willOpen);
-      head.setAttribute("aria-expanded", willOpen ? "true" : "false");
-      // Mobile accordion: opening one group closes the others, except the
-      // group holding the current page (.has-active) which may stay expanded.
-      if (willOpen && window.matchMedia("(max-width: 860px)").matches) {
-        var groups = document.querySelectorAll(".navgroup");
-        for (var i = 0; i < groups.length; i++) {
-          if (groups[i] !== group && !groups[i].classList.contains("has-active")) {
-            groups[i].classList.remove("open");
-            var h = groups[i].querySelector(".navgroup-head");
-            if (h) { h.setAttribute("aria-expanded", "false"); }
-          }
-        }
-      }
-    });
-  }
+  /* ---------- workspace sidebar active sync (v3.6) ----------
+     The v3.1 collapsible navgroups are gone with the old grouped sidebar;
+     markActiveNav() now handles sidebar + rail + bottom-nav highlighting
+     and is re-run after every PJAX swap. */
 
   function swapContent(url, html, push) {
     var doc;
@@ -220,7 +187,6 @@
     if (doc.title) { document.title = doc.title; }
     rerunScripts(current);
     markActiveNav(url);
-    syncNavGroups();
     if (push !== false) {
       try { window.history.pushState({ pjax: true }, "", url); }
       catch (e) { /* ignore */ }
@@ -249,7 +215,6 @@
   function initPjax() {
     if (!mainEl()) { return; } // login page etc: no pjax container, no pjax
     markActiveNav(window.location.href);
-    syncNavGroups();
 
     // Intercept clicks on eligible internal GET links (sidebar, bottom nav, tiles).
     document.addEventListener("click", function (e) {
@@ -290,7 +255,5 @@
   ready(function () {
     initDrawer();
     initPjax();
-    initNavGroups();
-    syncNavGroups();
   });
 })();

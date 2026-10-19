@@ -33,6 +33,7 @@ from app.models import (User, AttendanceRecord, AuditLog, WorkLocation,
 from app.files import (store_file, read_file, remove_file, upload_root,
                        manager_chain_ids)
 from app.audit import record as audit_record
+from app.settingsutil import get_setting
 import config as app_config
 
 engagement_bp = Blueprint("engagement", __name__)
@@ -90,10 +91,31 @@ def notify_user(user_id, kind, title, body=None, link=None, ref_id=None,
     category: 'important' (default — notices, approvals, JD, training,
     payroll, expenses, letters, documents) or 'event' (celebration
     alerts: birthday/anniversary broadcasts and wishes).
+
+    v3.6: HR Settings "Send leave notifications" — leave-related approval
+    notifications are suppressed here when the setting is off.
     """
+    if kind == "approval" and _is_leave_notification(title, body):
+        if get_setting("leave_notifications", "1") != "1":
+            return
     db.session.add(Notification(user_id=user_id, kind=kind, title=title,
                                 body=body, link=link, ref_id=ref_id,
                                 category=category))
+
+
+# v3.6: titles/bodies the approval engine uses for the Leave process
+# (approvals._notify funnels every process through kind="approval", so the
+# process label "Leave" in the title/body is the identifier; the halted-
+# routing notice carries it in the body instead of the title).
+_LEAVE_NOTIFY_TITLES = ("Approval needed: Leave", "Leave approved",
+                        "Leave rejected")
+
+
+def _is_leave_notification(title, body):
+    """True when an approval-engine notification belongs to the Leave process."""
+    if (title or "") in _LEAVE_NOTIFY_TITLES:
+        return True
+    return (body or "").startswith("Leave #")
 
 
 CELEBRATION_KINDS = ("birthday", "anniversary", "wish")
@@ -264,6 +286,15 @@ def locations():
 @login_required
 def punch_page():
     """Mobile-first check-in/out page. Runs the 45-day purge at most daily."""
+    # v3.6: HR Settings "Allow check-in from mobile" — when off, the punch
+    # form is replaced by a policy message. (punch.html renders disabled_msg
+    # when present; the flash keeps the message visible regardless.)
+    if get_setting("mobile_checkin", "1") != "1":
+        msg = ("Mobile check-in is disabled by HR policy — "
+               "use Regularisation.")
+        flash(msg, "warning")
+        return render_template("punch.html", today=gst_now().date(),
+                               record=None, locations=[], disabled_msg=msg)
     maybe_purge_daily()
     today = gst_now().date()
     rec = AttendanceRecord.query.filter_by(
@@ -321,16 +352,23 @@ def punch_submit():
     ptype = (request.form.get("punch_type") or "").strip()
     if ptype not in ("in", "out"):
         return jsonify(ok=False, error="Invalid punch type."), 400
-    try:
-        lat = float(request.form.get("latitude", ""))
-        lng = float(request.form.get("longitude", ""))
-    except (TypeError, ValueError):
-        return jsonify(ok=False,
-                       error="Location is required. Please enable GPS and retry."), 400
-    try:
-        accuracy = float(request.form.get("accuracy", "") or 0) or None
-    except (TypeError, ValueError):
-        accuracy = None
+    # v3.6: HR Settings "Geolocation tracking" — when off, the lat/lng
+    # requirement and the geofence check are skipped entirely; the punch is
+    # accepted on selfie validation alone (selfie requirement below stays).
+    geo_on = get_setting("geolocation", "1") == "1"
+    if geo_on:
+        try:
+            lat = float(request.form.get("latitude", ""))
+            lng = float(request.form.get("longitude", ""))
+        except (TypeError, ValueError):
+            return jsonify(ok=False,
+                           error="Location is required. Please enable GPS and retry."), 400
+        try:
+            accuracy = float(request.form.get("accuracy", "") or 0) or None
+        except (TypeError, ValueError):
+            accuracy = None
+    else:
+        lat = lng = accuracy = None
     photo = request.files.get("photo")
     if not photo:
         return jsonify(ok=False,
@@ -339,9 +377,9 @@ def punch_submit():
     if err:
         return jsonify(ok=False, error=err), 400
 
-    loc, dist = match_location(lat, lng)
+    loc, dist = match_location(lat, lng) if geo_on else (None, None)
     active_count = WorkLocation.query.filter_by(is_active=True).count()
-    if active_count > 0 and (loc is None or dist > loc.radius_m):
+    if geo_on and active_count > 0 and (loc is None or dist > loc.radius_m):
         # v3.4.1: no location/distance detail when far away — the generic
         # message discloses nothing about the site's position.
         detail = (dist is not None and dist <= 2000)
@@ -664,6 +702,11 @@ def ensure_todays_celebrations():
     Safe to call repeatedly (unique constraint); runs once per day per
     app instance via the AppSetting guard.
     """
+    # v3.6: HR Settings "Celebration reminders" — when off, no NEW posts are
+    # generated. Checked before the daily guard so re-enabling works the
+    # same day; existing posts and the per-user opt-out are untouched.
+    if get_setting("celebrations_enabled", "1") != "1":
+        return []
     today = gst_now().date()
     if not setting_today_guard("celebrations_last_run", today):
         return []

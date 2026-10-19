@@ -141,6 +141,48 @@ def employees():
                            statuses=statuses)
 
 
+@hrms_bp.route("/employees/export", methods=["POST"])
+@login_required
+@admin_required
+def employees_export():
+    """V3.6 bulk export: CSV of the ticked employees (admin only).
+
+    Uses the same formula-injection guard as the reports (csv_cell).
+    """
+    import csv
+    import io
+    from flask import Response
+    uids = [u for u in request.form.getlist("uid") if u]
+    if not uids:
+        flash("Select at least one employee to export.", "error")
+        return redirect(url_for("hrms.employees"))
+    users = User.query.filter(User.id.in_(uids)).order_by(User.name).all()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Employee ID", "Name", "Designation", "Department",
+                "Reporting Manager", "Employment Status", "Joining Date",
+                "Visa Expiry", "Passport Expiry", "Email", "Mobile"])
+    for u in users:
+        w.writerow([csv_cell(u.id), csv_cell(u.name),
+                    csv_cell(u.designation), csv_cell(u.department),
+                    csv_cell(u.reporting_manager),
+                    csv_cell(u.employment_status),
+                    u.joining_date.isoformat() if u.joining_date else "",
+                    u.visa_expiry_date.isoformat()
+                    if u.visa_expiry_date else "",
+                    u.passport_expiry_date.isoformat()
+                    if u.passport_expiry_date else "",
+                    csv_cell(u.email), csv_cell(u.mobile)])
+    record("employees_exported",
+           f"{len(users)} employee(s) exported to CSV: "
+           f"{', '.join(u.id for u in users)}",
+           entity="employee", entity_id="bulk")
+    db.session.commit()
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition":
+                             "attachment; filename=employees_export.csv"})
+
+
 @hrms_bp.route("/employees/new", methods=["GET", "POST"])
 @login_required
 @employee_creator_required

@@ -12,6 +12,9 @@
 </div>
 {% endif %}
 
+{% if disabled_msg %}
+<div class="infobanner">{{ disabled_msg }}</div>
+{% else %}
 <input type="hidden" id="punchCsrf" value="{{ csrf_token() }}">
 <div class="twocol">
   <div class="formcard punch-card">
@@ -43,4 +46,5 @@
 
 <p class="muted">If your phone cannot share location or open the camera, use <a href="{{ url_for('views.regularisation') }}">Attendance Regularisation</a> instead.</p>
 <script src="{{ url_for('static', filename='punch.js') }}?v=2"></script>
+{% endif %}
 {% endblock %}

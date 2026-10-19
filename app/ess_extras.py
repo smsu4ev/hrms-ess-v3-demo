@@ -422,25 +422,22 @@ def decide_expense(claim_id):
 @_hr_required
 def hr_expenses():
     status = (request.args.get("status") or "").strip()
-    dept = (request.args.get("dept") or "").strip()
+    # v3.6: category filter (replaces the department filter per the
+    # Frappe-model list spec).
+    category = (request.args.get("category") or "").strip()
     q = ExpenseClaim.query
     if status in ("pending", "approved", "rejected"):
         q = q.filter_by(status=status)
+    if category in [c for c, _ in EXPENSE_CATEGORIES]:
+        q = q.filter_by(category=category)
     claims = q.order_by(ExpenseClaim.created_at.desc()).all()
     users = {u.id: u for u in User.query.all()}
-    if dept:
-        claims = [c for c in claims
-                  if users.get(c.user_id)
-                  and users[c.user_id].department == dept]
     approved_total = sum(c.amount for c in ExpenseClaim.query.filter_by(
         status="approved").all())
-    departments = sorted({u.department for u in users.values()
-                          if u.department and u.is_active})
     return render_template("hr_expenses.html", claims=claims, users=users,
-                           status=status, dept=dept,
-                           departments=departments,
+                           status=status, category=category,
                            approved_total=approved_total,
-                           categories=dict(EXPENSE_CATEGORIES))
+                           categories=EXPENSE_CATEGORIES)
 
 
 # ================= Letter requests =================

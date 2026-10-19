@@ -538,11 +538,14 @@ check("prefill uses user separation date", b'value="2026-09-30"' in r.data)
 check("prefill uses user separation type",
       b'<option value="Termination" selected>' in r.data)
 
-# ================= nav links =================
+# ================= nav links (v3.6: Frappe workspace model) =================
 r = client.get("/")
 check("nav has My Roster link", b"My Roster" in r.data)
-check("nav has Weekly Roster link", b"Weekly Roster" in r.data)
+r = client.get("/ws/shift-attendance")
+check("nav has Roster link", b"/hrms/roster" in r.data)
+r = client.get("/")
 check("nav has Shift Patterns link", b"Shift Patterns" in r.data)
+r = client.get("/ws/tenure")
 check("nav has Final Settlements link", b"Final Settlements" in r.data)
 
 print(f"\n{len(passed)} passed, {len(failed)} failed")

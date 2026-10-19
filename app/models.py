@@ -1312,6 +1312,16 @@ class LetterRequest(db.Model):
     generated_letter = db.relationship("GeneratedLetter")
 
 
+# v3.6: HR Settings key/value store (Frappe-model HR Settings page).
+class SettingKV(db.Model):
+    __tablename__ = "setting_kv"
+    key = db.Column(db.String(80), primary_key=True)
+    value = db.Column(db.String(500), nullable=False, default="")
+    updated_by = db.Column(db.String(20))
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow,
+                           onupdate=datetime.utcnow)
+
+
 # v3.5: helpdesk tickets + shift swaps (kept in a separate module to keep
 # models.py readable; single-table creation pattern applies).
 from app.models_v35 import (HelpdeskTicket, TicketComment,  # noqa: E402,F401

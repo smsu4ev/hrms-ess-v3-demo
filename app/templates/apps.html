@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}All Apps{% endblock %}
+{% block content %}
+{% set title = 'All Apps' %}
+{% set workspace = '' %}
+{% set crumbs = [] %}
+{% set actions = '' %}
+{% include '_content_header.html' %}
+{% set ns = namespace(ess_route=url_for('views.dashboard')) %}
+{% if workspaces is defined %}
+{% for ws in workspaces %}
+{% if ws.key in ('me', 'ess') %}{% set ns.ess_route = ws.route %}{% endif %}
+{% endfor %}
+{% endif %}
+<p class="muted" style="margin-bottom:16px">Switch between workspaces, or open your self-service home.</p>
+<div class="appgrid">
+  {% if workspaces is defined %}
+  {% for ws in workspaces %}
+  <a class="appcard" href="{{ ws.route }}">
+    <span class="appcard-ico">{{ icon(ws.icon) }}</span>
+    <span class="appcard-title">{{ ws.title }}</span>
+    <span class="appcard-desc">{{ descriptions.get(ws.key, 'Open the ' + ws.title + ' workspace.') }}</span>
+  </a>
+  {% endfor %}
+  {% endif %}
+  <a class="appcard ess" href="{{ ns.ess_route }}">
+    <span class="appcard-ico">{{ icon('user') }}</span>
+    <span class="appcard-title">ESS</span>
+    <span class="appcard-desc">Employee self-service: leave, attendance, payslips, documents and more.</span>
+  </a>
+</div>
+{% endblock %}

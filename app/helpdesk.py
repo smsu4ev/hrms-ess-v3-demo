@@ -215,11 +215,15 @@ def hr_tickets():
     status = (request.args.get("status") or "").strip()
     category = (request.args.get("category") or "").strip()
     assignee = (request.args.get("assignee") or "").strip()
+    # v3.6: priority filter.
+    priority = (request.args.get("priority") or "").strip()
     q = HelpdeskTicket.query
     if status in TICKET_STATUSES:
         q = q.filter_by(status=status)
     if category in [c for c, _ in TICKET_CATEGORIES]:
         q = q.filter_by(category=category)
+    if priority in TICKET_PRIORITIES:
+        q = q.filter_by(priority=priority)
     if assignee == "mine":
         q = q.filter_by(assignee_id=current_user.id)
     elif assignee == "unassigned":
@@ -230,6 +234,7 @@ def hr_tickets():
         User.id.in_(_staff_user_ids())).order_by(User.name).all()
     return render_template("hr_tickets.html", tickets=tickets, users=users,
                            status=status, category=category, assignee=assignee,
+                           priority=priority, priorities=TICKET_PRIORITIES,
                            categories=TICKET_CATEGORIES,
                            statuses=TICKET_STATUSES,
                            staff_users=staff_users)
@@ -239,15 +244,20 @@ def hr_tickets():
 @login_required
 @_ticket_staff_required
 def hr_ticket_detail(ticket_id):
+    from app.models import AuditLog
     t = HelpdeskTicket.query.get_or_404(ticket_id)
     comments = TicketComment.query.filter_by(ticket_id=t.id).order_by(
         TicketComment.created_at).all()
     users = {u.id: u for u in User.query.all()}
     staff_users = User.query.filter(
         User.id.in_(_staff_user_ids())).order_by(User.name).all()
+    # v3.6: activity timeline for the ticket.
+    logs = AuditLog.query.filter_by(entity="ticket",
+                                    entity_id=str(t.id))\
+        .order_by(AuditLog.created_at.desc()).limit(40).all()
     return render_template("hr_ticket_detail.html", t=t, comments=comments,
                            users=users, staff_users=staff_users,
-                           statuses=TICKET_STATUSES)
+                           statuses=TICKET_STATUSES, logs=logs)
 
 
 @helpdesk_bp.route("/hrms/tickets/<int:ticket_id>/status", methods=["POST"])

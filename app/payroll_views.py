@@ -347,8 +347,19 @@ def loans():
 @login_required
 @hr_required
 def runs():
-    rows = PayrollRun.query.order_by(PayrollRun.period.desc()).all()
-    return render_template("hr_payroll_runs.html", runs=rows)
+    # v3.6: status + period filters (GET params).
+    status = (request.args.get("status") or "").strip()
+    period = (request.args.get("period") or "").strip()
+    q = PayrollRun.query
+    if status in ("draft", "in_review", "locked", "approved"):
+        q = q.filter_by(status=status)
+    if period:
+        q = q.filter(PayrollRun.period.ilike(f"%{period}%"))
+    rows = q.order_by(PayrollRun.period.desc()).all()
+    return render_template("hr_payroll_runs.html", runs=rows, status=status,
+                           period=period,
+                           statuses=["draft", "in_review", "locked",
+                                     "approved"])
 
 
 @payroll_bp.route("/payroll/new", methods=["POST"])
@@ -393,8 +404,12 @@ def run_detail(run_id):
         totals["gross"] += l.gross
         totals["deductions"] += l.total_deductions
         totals["net"] += l.net
+    # v3.6: activity timeline for the run.
+    logs = AuditLog.query.filter_by(entity="payroll_run",
+                                    entity_id=str(run.id))\
+        .order_by(AuditLog.created_at.desc()).limit(40).all()
     return render_template("hr_payroll_run.html", run=run, lines=lines,
-                           users=users, totals=totals)
+                           users=users, totals=totals, logs=logs)
 
 
 @payroll_bp.route("/payroll/<int:run_id>/recalc", methods=["POST"])

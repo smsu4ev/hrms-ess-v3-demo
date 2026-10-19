@@ -305,10 +305,16 @@ def detail(sid):
         .filter(PPEIssue.returned_date.is_(None)).all()
     leave_pending = (LeaveRequest.query
                      .filter_by(user_id=st.user_id, status="pending").count())
+    # v3.6: activity timeline for the settlement.
+    from app.models import AuditLog
+    logs = AuditLog.query.filter_by(entity="settlement",
+                                    entity_id=str(st.id))\
+        .order_by(AuditLog.created_at.desc()).limit(40).all()
     return render_template(
         "hr_settlement_detail.html", st=st, u=u, manual=manual,
         assets_pending=assets_pending, ppe_pending=ppe_pending,
-        leave_pending=leave_pending, company_name=app_config.COMPANY_NAME)
+        leave_pending=leave_pending, company_name=app_config.COMPANY_NAME,
+        logs=logs)
 
 
 @settlement_bp.route("/settlements/<int:sid>/calculate", methods=["POST"])

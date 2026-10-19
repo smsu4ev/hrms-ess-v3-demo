@@ -184,12 +184,22 @@ def cancel_leave(req_id):
 @login_required
 def attendance():
     today = date.today()
-    try:
-        year = int(request.args.get("y", today.year))
-        month = int(request.args.get("m", today.month))
-        view_date = date(year, month, 1)
-    except ValueError:
-        view_date = today.replace(day=1)
+    # v3.6: month can come from a date/month picker (ym=YYYY-MM) or the
+    # legacy y/m params.
+    ym = (request.args.get("ym") or "").strip()
+    if ym:
+        try:
+            y, m = ym.split("-")
+            view_date = date(int(y), int(m), 1)
+        except (ValueError, TypeError):
+            view_date = today.replace(day=1)
+    else:
+        try:
+            year = int(request.args.get("y", today.year))
+            month = int(request.args.get("m", today.month))
+            view_date = date(year, month, 1)
+        except ValueError:
+            view_date = today.replace(day=1)
     month_start = view_date
     month_end = date(view_date.year, view_date.month,
                      calmod.monthrange(view_date.year, view_date.month)[1])
@@ -203,15 +213,22 @@ def attendance():
     next_m = (month_end + timedelta(days=1)).replace(day=1)
     # v3.3: recent geo/selfie punches for this month.
     from app.models import PunchRecord, WorkLocation
-    punches = PunchRecord.query.filter(
+    # v3.6: punch-type filter (check-in / check-out).
+    punch = (request.args.get("punch") or "").strip()
+    if punch not in ("in", "out"):
+        punch = ""
+    pq = PunchRecord.query.filter(
         PunchRecord.user_id == current_user.id,
         PunchRecord.local_date >= month_start,
-        PunchRecord.local_date <= month_end)\
-        .order_by(PunchRecord.punched_at.desc()).limit(60).all()
+        PunchRecord.local_date <= month_end)
+    if punch:
+        pq = pq.filter(PunchRecord.punch_type == punch)
+    punches = pq.order_by(PunchRecord.punched_at.desc()).limit(60).all()
     locations = {l.id: l for l in WorkLocation.query.all()}
     return render_template("attendance.html", weeks=weeks, by_date=by_date,
                            view_date=view_date, prev_m=prev_m, next_m=next_m,
-                           today=today, punches=punches, locations=locations)
+                           today=today, punches=punches, locations=locations,
+                           punch=punch)
 
 
 # ---------------- Payslip ----------------
@@ -397,8 +414,19 @@ def approvals():
     from app.approvals import (get_or_start_instance, can_act, step_badge,
                                inbox_for)
     from app.models import RegularisationRequest
+    # v3.6: process-type + status filters (GET params). Default status
+    # "pending" preserves the original inbox behaviour exactly; the
+    # "approved"/"rejected" options list decided leave requests
+    # (other chains only exist in a pending state).
+    process = (request.args.get("process") or "all").strip()
+    if process not in ("all", "leave", "regularisation", "employee_creation",
+                       "expense", "shift_swap"):
+        process = "all"
+    status = (request.args.get("status") or "pending").strip()
+    if status not in ("pending", "approved", "rejected"):
+        status = "pending"
     # --- leave section (legacy default 1-step behaviour preserved)
-    q = LeaveRequest.query.filter_by(status="pending")
+    q = LeaveRequest.query.filter_by(status=status)
     if not current_user.is_admin:
         # Non-admins see requests from their own department only, and only
         # the ones sitting on their own approval step.
@@ -416,33 +444,34 @@ def approvals():
     users = {u.id: u for u in User.query.filter(
         User.id.in_([i["req"].user_id for i in leave_items])).all()} \
         if leave_items else {}
-    # --- unified inbox: other chains awaiting this user
+    # --- unified inbox: other chains awaiting this user (pending only)
     reg_items, creation_items, expense_items, swap_items = [], [], [], []
-    for inst in inbox_for(current_user):
-        if inst.process_key == "regularisation":
-            rr = RegularisationRequest.query.get(int(inst.ref_id))
-            if rr is not None and rr.status == "pending":
-                reg_items.append({"req": rr, "instance": inst,
-                                  "badge": step_badge(inst)})
-        elif inst.process_key == "employee_creation":
-            u = User.query.get(inst.ref_id)
-            if u is not None and u.employment_status == "pending_approval":
-                creation_items.append({"user": u, "instance": inst,
-                                       "badge": step_badge(inst)})
-        elif inst.process_key == "expense":
-            from app.models import ExpenseClaim
-            claim = ExpenseClaim.query.get(int(inst.ref_id))
-            if claim is not None and claim.status == "pending":
-                expense_items.append({"claim": claim, "instance": inst,
+    if status == "pending":
+        for inst in inbox_for(current_user):
+            if inst.process_key == "regularisation":
+                rr = RegularisationRequest.query.get(int(inst.ref_id))
+                if rr is not None and rr.status == "pending":
+                    reg_items.append({"req": rr, "instance": inst,
                                       "badge": step_badge(inst)})
-        elif inst.process_key == "shift_swap":
-            from app.models import ShiftSwapRequest
-            from app.helpdesk import rest_gap_flags
-            swap = ShiftSwapRequest.query.get(int(inst.ref_id))
-            if swap is not None and swap.status == "pending_approval":
-                swap_items.append({"swap": swap, "instance": inst,
-                                   "badge": step_badge(inst),
-                                   "flags": rest_gap_flags(swap)})
+            elif inst.process_key == "employee_creation":
+                u = User.query.get(inst.ref_id)
+                if u is not None and u.employment_status == "pending_approval":
+                    creation_items.append({"user": u, "instance": inst,
+                                           "badge": step_badge(inst)})
+            elif inst.process_key == "expense":
+                from app.models import ExpenseClaim
+                claim = ExpenseClaim.query.get(int(inst.ref_id))
+                if claim is not None and claim.status == "pending":
+                    expense_items.append({"claim": claim, "instance": inst,
+                                          "badge": step_badge(inst)})
+            elif inst.process_key == "shift_swap":
+                from app.models import ShiftSwapRequest
+                from app.helpdesk import rest_gap_flags
+                swap = ShiftSwapRequest.query.get(int(inst.ref_id))
+                if swap is not None and swap.status == "pending_approval":
+                    swap_items.append({"swap": swap, "instance": inst,
+                                       "badge": step_badge(inst),
+                                       "flags": rest_gap_flags(swap)})
     # --- shift swaps: names + pattern labels for the table
     swap_user_ids, swap_pattern_ids = set(), set()
     for it in swap_items:
@@ -462,6 +491,7 @@ def approvals():
                            items=[i["req"] for i in leave_items],
                            meta={i["req"].id: i for i in leave_items},
                            users=users, leave_types=app_config.LEAVE_TYPES,
+                           process=process, status=status,
                            reg_items=reg_items,
                            creation_items=creation_items,
                            expense_items=expense_items,

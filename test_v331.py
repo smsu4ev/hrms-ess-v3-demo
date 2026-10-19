@@ -533,12 +533,28 @@ with app.app_context():
           cats.get("Old notice") == "important", str(cats))
     login("E1", "pw-E1")
     r = client.get("/notifications")
+    # v3.6: the desk shell's slide-over notifications panel also renders all
+    # recent notifications, so scope the tab checks to the tab-filtered list
+    # (matching-div extraction; a naive split would swallow the panel too).
+    def tab_list(resp):
+        html = resp.data
+        start = html.find(b'<div class="notif-list">')
+        if start < 0:
+            return b""
+        pos = start + len(b'<div class="notif-list">')
+        depth = 1
+        for m in re.finditer(rb"</?div\b[^>]*>", html[pos:]):
+            tag = m.group(0)
+            depth += -1 if tag.startswith(b"</") else 1
+            if depth == 0:
+                return html[pos:pos + m.start()]
+        return b""
     check("default tab is Important",
-          b"Birthday alert" not in r.data and b"Notice alert" in r.data)
+          b"Birthday alert" not in tab_list(r) and b"Notice alert" in tab_list(r))
     check("important unread badge", b"Important Updates" in r.data)
     r = client.get("/notifications?tab=event")
     check("events tab shows celebration",
-          b"Birthday alert" in r.data and b"Notice alert" not in r.data)
+          b"Birthday alert" in tab_list(r) and b"Notice alert" not in tab_list(r))
     r = post("/notifications/read-all", {"tab": "event"}, token_path="/notifications")
     with app.app_context():
         ev_unread = Notification.query.filter_by(

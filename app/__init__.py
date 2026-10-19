@@ -68,6 +68,12 @@ def create_app():
     app.register_blueprint(ess_extras.extras_bp)
     from app import helpdesk  # noqa: E402  (v3.5 helpdesk + shift swaps)
     app.register_blueprint(helpdesk.helpdesk_bp)
+    from app import desk  # noqa: E402  (v3.6 Frappe shell: /apps + /api/awesome)
+    app.register_blueprint(desk.desk_bp)
+    from app import workspaces  # noqa: E402  (v3.6 workspace homes)
+    app.register_blueprint(workspaces.workspaces_bp)
+    from app import settings  # noqa: E402  (v3.6 HR Settings)
+    app.register_blueprint(settings.settings_bp)
 
     @app.before_request
     def enforce_password_change():
@@ -122,7 +128,48 @@ def create_app():
             "trade_name": app_config.TRADE_NAME,
             "can_view_salary": can_view,
             "unread_count": unread,
+            # v3.6 Frappe shell: workspace rail/sidebar data.
+            "workspaces": _ws_list(),
+            "ws_groups": _ws_groups(),
+            "ws_current": _ws_current(),
         }
+
+    # --- v3.6 workspace globals (imported lazily; degrade gracefully) ---
+    def _ws_list():
+        try:
+            if not current_user.is_authenticated:
+                return []
+            from app.workspaces import visible_workspaces
+            return visible_workspaces(current_user)
+        except Exception:
+            return []
+
+    def _ws_groups():
+        try:
+            if not current_user.is_authenticated:
+                return []
+            from app.workspaces import workspace_nav, ws_key_for_endpoint
+            from flask import g
+            key = getattr(g, "ws_key", None) or ws_key_for_endpoint(request.endpoint or "")
+            if not key:
+                return []
+            return workspace_nav(current_user, key)
+        except Exception:
+            return []
+
+    def _ws_current():
+        try:
+            if not current_user.is_authenticated:
+                return None
+            from app.workspaces import visible_workspaces, ws_key_for_endpoint
+            from flask import g
+            key = getattr(g, "ws_key", None) or ws_key_for_endpoint(request.endpoint or "")
+            for ws in visible_workspaces(current_user):
+                if ws["key"] == key:
+                    return ws
+            return None
+        except Exception:
+            return None
 
     with app.app_context():
         db.create_all()

@@ -1,0 +1,19 @@
+{# V3.6 activity timeline from AuditLog entries.
+   Param: timeline_logs — list of AuditLog (created_at, actor_id, action, detail,
+   field_name, old_value, new_value). #}
+{% if timeline_logs %}
+<ul class="timeline">
+  {% for l in timeline_logs %}
+  <li>
+    <div><strong>{{ l.actor_id or 'system' }}</strong> &middot; {{ l.action|replace('_', ' ') }}</div>
+    {% if l.field_name %}<div>Field <span class="t-change">{{ l.field_name }}</span>:
+      <span class="t-change">{{ l.old_value or '—' }}</span> &rarr;
+      <span class="t-change">{{ l.new_value or '—' }}</span></div>{% endif %}
+    {% if l.detail and not l.field_name %}<div class="muted">{{ l.detail }}</div>{% endif %}
+    <div class="t-time">{{ l.created_at.strftime('%d %b %Y %H:%M') if l.created_at else '' }}</div>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">No activity recorded yet.</p>
+{% endif %}

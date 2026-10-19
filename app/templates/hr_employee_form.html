@@ -1,75 +1,137 @@
 {% extends "base.html" %}
 {% block title %}{% if user %}Edit {{ user.id }}{% else %}Add Employee{% endif %}{% endblock %}
 {% block content %}
-<h2>{% if user %}Edit Employee {{ user.id }} - {{ user.name }}{% else %}Add Employee{% endif %}</h2>
+{% include "_frappe_css.html" %}
+<p class="crumbs"><a href="{{ url_for('views.dashboard') }}">HR Setup</a><span class="sep">/</span><a href="{{ url_for('hrms.employees') }}">Employee Central</a><span class="sep">/</span>{% if user %}<a href="{{ url_for('hrms.employee_detail', uid=user.id) }}">{{ user.id }}</a><span class="sep">/</span>Edit{% else %}New{% endif %}</p>
+<h2>{% if user %}Edit Employee {{ user.id }} - {{ user.name }}{% else %}Add Employee{% endif %}
+  <span class="pill pill-amber not-saved-pill" data-not-saved hidden>Not Saved</span></h2>
 {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 {% if not user and creator_is_hr_staff %}<div class="flash">As HR staff, the record you create goes to the HR Manager for
 review and approval before it becomes active. Salary fields are set by the HR Manager afterwards.</div>{% endif %}
-<div class="formcard">
-<form method="post">
+<div class="formcard" data-tabgroup>
+<form method="post" data-dirty-watch>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  {% if not user %}
-  <label>Employee ID <input type="text" name="employee_id" required></label>
+  <div class="tabs" data-tabs role="tablist" aria-label="Employee sections">
+    <button type="button" class="tab active" data-tab="tab-overview" role="tab" aria-selected="true">Overview</button>
+    <button type="button" class="tab" data-tab="tab-address" role="tab" aria-selected="false">Address &amp; Contacts</button>
+    <button type="button" class="tab" data-tab="tab-attendance" role="tab" aria-selected="false">Attendance &amp; Leaves</button>
+    {% if can_view_salary %}<button type="button" class="tab" data-tab="tab-salary" role="tab" aria-selected="false">Salary</button>{% endif %}
+    <button type="button" class="tab" data-tab="tab-personal" role="tab" aria-selected="false">Personal</button>
+    <button type="button" class="tab" data-tab="tab-documents" role="tab" aria-selected="false">Documents &amp; Photo</button>
+    <button type="button" class="tab" data-tab="tab-joining" role="tab" aria-selected="false">Joining &amp; Exit</button>
+  </div>
+
+  <div class="tabpane active" data-tabpane="tab-overview" role="tabpanel">
+    <div class="fieldgrid">
+      {% if not user %}
+      <label>Employee ID <span class="req">*</span> <input type="text" name="employee_id" required></label>
+      {% endif %}
+      <label>Full Name <span class="req">*</span> <input type="text" name="name" value="{{ user.name if user }}" required></label>
+      <label>Designation <input type="text" name="designation" value="{{ user.designation if user }}"></label>
+      <label>Department <input type="text" name="department" value="{{ user.department if user }}"></label>
+      <label>Reporting Manager (Employee ID)
+        <select name="reporting_manager">
+          <option value="">- none -</option>
+          {% for m in managers %}
+          <option value="{{ m.id }}" {% if user and user.reporting_manager == m.id %}selected{% endif %}>{{ m.name }} ({{ m.id }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Employment Status
+        <select name="employment_status">
+          {% for s in statuses %}
+          <option value="{{ s }}" {% if user and user.employment_status == s %}selected{% endif %}>{{ s|title }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Visa Company
+        <select name="visa_company_id">
+          <option value="">- none -</option>
+          {% for c in companies %}
+          <option value="{{ c.id }}" {% if user and user.visa_company_id == c.id %}selected{% endif %}>{{ c.code }} - {{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <div class="tabpane" data-tabpane="tab-address" role="tabpanel">
+    <div class="fieldgrid">
+      <label>Email <input type="email" name="email" value="{{ user.email if user }}"></label>
+      <label>Mobile <input type="text" name="mobile" value="{{ user.mobile if user }}"></label>
+      <label>Phone (WhatsApp) <input type="text" name="phone" value="{{ user.phone if user }}"></label>
+    </div>
+  </div>
+
+  <div class="tabpane" data-tabpane="tab-attendance" role="tabpanel">
+    <div class="fieldgrid">
+      <div class="full">
+        <p class="muted">Attendance punches, leave balances and leave requests are managed outside this form —
+        {% if user %}see the <a href="{{ url_for('hrms.employee_detail', uid=user.id) }}">employee record</a> for this month's attendance and leave balances.{% else %}they become available on the employee record after creation.{% endif %}</p>
+      </div>
+    </div>
+  </div>
+
+  {% if can_view_salary %}
+  <div class="tabpane" data-tabpane="tab-salary" role="tabpanel">
+    <div class="fieldgrid">
+      <label>Basic Salary <input type="number" step="0.01" name="basic_salary" value="{{ user.basic_salary if user else 0 }}"></label>
+      <label>Monthly Salary <input type="number" step="0.01" name="monthly_salary" value="{{ user.monthly_salary if user else 0 }}"></label>
+      <div class="full"><p class="muted">Salary fields are editable by the HR Manager / admin only. Creating or editing employee records (salaries, IBAN, bank) is an admin-only action.</p></div>
+    </div>
+  </div>
   {% endif %}
-  <label>Full Name <input type="text" name="name" value="{{ user.name if user }}" required></label>
-  <label>Designation <input type="text" name="designation" value="{{ user.designation if user }}"></label>
-  <label>Department <input type="text" name="department" value="{{ user.department if user }}"></label>
-  <label>Reporting Manager (Employee ID)
-    <select name="reporting_manager">
-      <option value="">- none -</option>
-      {% for m in managers %}
-      <option value="{{ m.id }}" {% if user and user.reporting_manager == m.id %}selected{% endif %}>{{ m.name }} ({{ m.id }})</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Joining Date <input type="date" name="joining_date" value="{{ user.joining_date if user and user.joining_date }}"></label>
-  <label>Date of Birth <input type="date" name="date_of_birth" value="{{ user.date_of_birth if user and user.date_of_birth }}"></label>
-  <label>Employment Status
-    <select name="employment_status">
-      {% for s in statuses %}
-      <option value="{{ s }}" {% if user and user.employment_status == s %}selected{% endif %}>{{ s|title }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Nationality <input type="text" name="nationality" value="{{ user.nationality if user }}"></label>
-  <label>Visa Expiry Date <input type="date" name="visa_expiry_date" value="{{ user.visa_expiry_date if user and user.visa_expiry_date }}"></label>
-  <label>Passport Expiry Date <input type="date" name="passport_expiry_date" value="{{ user.passport_expiry_date if user and user.passport_expiry_date }}"></label>
-  <label>Emirates ID Expiry Date <input type="date" name="emirates_id_expiry_date" value="{{ user.emirates_id_expiry_date if user and user.emirates_id_expiry_date }}"></label>
-  <label>Emirates ID No. <input type="text" name="emirates_id_no" value="{{ user.emirates_id_no if user }}" placeholder="784-....-.......-." maxlength="40"></label>
-  <label>Email <input type="email" name="email" value="{{ user.email if user }}"></label>
-  <label>Mobile <input type="text" name="mobile" value="{{ user.mobile if user }}"></label>
-  <label>Phone (WhatsApp) <input type="text" name="phone" value="{{ user.phone if user }}"></label>
-  <label>Passport No. <input type="text" name="passport_no" value="{{ user.passport_no if user }}"></label>
-  <label>Bank IBAN (WPS) <input type="text" name="iban" value="{{ user.iban if user }}" placeholder="AE07..." maxlength="34"></label>
-  <label>Bank Name <input type="text" name="bank_name" value="{{ user.bank_name if user }}"></label>
-  <label>Visa Company
-    <select name="visa_company_id">
-      <option value="">- none -</option>
-      {% for c in companies %}
-      <option value="{{ c.id }}" {% if user and user.visa_company_id == c.id %}selected{% endif %}>{{ c.code }} - {{ c.name }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Exit Date (if left) <input type="date" name="exit_date" value="{{ user.exit_date if user and user.exit_date }}"></label>
-  {% if user and user.employment_status in ('resigned', 'terminated', 'retired') %}
-  <label>Separation Date <input type="date" name="separation_date" value="{{ user.separation_date if user.separation_date }}"></label>
-  <label>Separation Type
-    <select name="separation_type">
-      <option value="">- none -</option>
-      {% for t in ['Resignation', 'Termination', 'Contract End', 'Retirement', 'Absconding', 'Other'] %}
-      <option value="{{ t }}" {% if user.separation_type == t %}selected{% endif %}>{{ t }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <p class="muted">When a separation date is set, the employee also appears in the Separation and Turnover reports.</p>
-  {% endif %}
-  {% if current_user.is_admin %}
-  <label>Basic Salary <input type="number" step="0.01" name="basic_salary" value="{{ user.basic_salary if user else 0 }}"></label>
-  <label>Monthly Salary <input type="number" step="0.01" name="monthly_salary" value="{{ user.monthly_salary if user else 0 }}"></label>
-  {% endif %}
-  <button class="btn primary" type="submit">{% if user %}Save Changes{% else %}Create Employee{% endif %}</button>
-  <a class="btn" href="{{ url_for('hrms.employees') }}">Cancel</a>
+
+  <div class="tabpane" data-tabpane="tab-personal" role="tabpanel">
+    <div class="fieldgrid">
+      <label>Nationality <input type="text" name="nationality" value="{{ user.nationality if user }}"></label>
+      <label>Date of Birth <input type="date" name="date_of_birth" value="{{ user.date_of_birth if user and user.date_of_birth }}"></label>
+      <label>Emirates ID No. <input type="text" name="emirates_id_no" value="{{ user.emirates_id_no if user }}" placeholder="784-....-.......-." maxlength="40"></label>
+      <label>Emirates ID Expiry Date <input type="date" name="emirates_id_expiry_date" value="{{ user.emirates_id_expiry_date if user and user.emirates_id_expiry_date }}"></label>
+      <label>Passport No. <input type="text" name="passport_no" value="{{ user.passport_no if user }}"></label>
+      <label>Passport Expiry Date <input type="date" name="passport_expiry_date" value="{{ user.passport_expiry_date if user and user.passport_expiry_date }}"></label>
+      <label>Visa Expiry Date <input type="date" name="visa_expiry_date" value="{{ user.visa_expiry_date if user and user.visa_expiry_date }}"></label>
+      <label>Bank IBAN (WPS) <input type="text" name="iban" value="{{ user.iban if user }}" placeholder="AE07..." maxlength="34"></label>
+      <label>Bank Name <input type="text" name="bank_name" value="{{ user.bank_name if user }}"></label>
+    </div>
+  </div>
+
+  <div class="tabpane" data-tabpane="tab-documents" role="tabpanel">
+    <div class="fieldgrid">
+      <div class="full">
+        <p class="muted">{% if user %}The employee photo and vital documents (passport, Emirates ID, certificates)
+        are managed on the <a href="{{ url_for('hrms.employee_detail', uid=user.id) }}">employee record</a>
+        and in the <a href="{{ url_for('docs.hr_documents') }}?user={{ user.id }}">document vault</a>.
+        {% else %}The photo and vital documents can be uploaded on the employee record after creation.{% endif %}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabpane" data-tabpane="tab-joining" role="tabpanel">
+    <div class="fieldgrid">
+      <label>Joining Date <input type="date" name="joining_date" value="{{ user.joining_date if user and user.joining_date }}"></label>
+      <label>Exit Date (if left) <input type="date" name="exit_date" value="{{ user.exit_date if user and user.exit_date }}"></label>
+      {% if user and user.employment_status in ('resigned', 'terminated', 'retired') %}
+      <label>Separation Date <input type="date" name="separation_date" value="{{ user.separation_date if user.separation_date }}"></label>
+      <label>Separation Type
+        <select name="separation_type">
+          <option value="">- none -</option>
+          {% for t in ['Resignation', 'Termination', 'Contract End', 'Retirement', 'Absconding', 'Other'] %}
+          <option value="{{ t }}" {% if user.separation_type == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div class="full"><p class="muted">When a separation date is set, the employee also appears in the Separation and Turnover reports.</p></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <p style="margin-top:18px">
+    <button class="btn-dark" type="submit">{% if user %}Save Changes{% else %}Create Employee{% endif %}</button>
+    <a class="btn" href="{{ url_for('hrms.employees') }}">Cancel</a>
+  </p>
 </form>
 </div>
 {% if user %}<p class="muted">Every changed field is written to the audit trail (old value -> new value).</p>{% endif %}
+<script src="{{ url_for('static', filename='forms.js') }}"></script>
 {% endblock %}

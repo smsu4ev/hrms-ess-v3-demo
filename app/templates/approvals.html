@@ -1,9 +1,46 @@
 {% extends "base.html" %}
+{% from "_frappe_pills.html" import status_pill %}
 {% block title %}Approvals{% endblock %}
 {% block content %}
-<h2>Pending Leave Approvals</h2>
+{% include "_frappe_css.html" %}
+{% set title = "Approvals" %}
+{% set desc = "Unified approval inbox: every chain awaiting your decision, with the current step badge." %}
+{% set add_url = url_for('views.leave') %}
+{% set add_label = "+ Apply for Leave" %}
+{% set crumb = '<a href="' + url_for('views.dashboard') + '">My Team</a><span class="sep">/</span>Approvals' %}
+{% include "_frappe_list_header.html" %}
+
+<div class="filter-row">
+  <form method="get" action="{{ url_for('views.approvals') }}" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+    <label>Process type
+      <select name="process">
+        <option value="all" {% if process == 'all' %}selected{% endif %}>All processes</option>
+        <option value="leave" {% if process == 'leave' %}selected{% endif %}>Leave applications</option>
+        <option value="regularisation" {% if process == 'regularisation' %}selected{% endif %}>Attendance regularisation</option>
+        <option value="employee_creation" {% if process == 'employee_creation' %}selected{% endif %}>Employee creation</option>
+        <option value="expense" {% if process == 'expense' %}selected{% endif %}>Expense claims</option>
+        <option value="shift_swap" {% if process == 'shift_swap' %}selected{% endif %}>Shift swaps</option>
+      </select>
+    </label>
+    <label>Status
+      <select name="status">
+        {% for s in ['pending', 'approved', 'rejected'] %}
+        <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s|title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <span class="fbtns">
+      <button class="btn small primary" type="submit">Filter</button>
+      <a class="btn small" href="{{ url_for('views.approvals') }}">Clear</a>
+    </span>
+  </form>
+</div>
+{% if status != 'pending' %}<p class="muted">Showing decided leave requests — regularisation, employee creation, expense and swap chains only appear under <em>Pending</em>.</p>{% endif %}
+
+{% if process in ('all', 'leave') %}
+<h2>{% if status == 'pending' %}Pending Leave Approvals{% else %}Leave Applications — {{ status|title }}{% endif %}</h2>
 <div class="tbl-wrap"><table class="tbl">
-  <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Reason</th><th>Applied</th><th>Chain</th><th>Decision</th></tr>
+  <tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Reason</th><th>Applied</th><th>Chain</th><th>Status / Decision</th></tr>
   {% for r in items %}
   {% set u = users.get(r.user_id) %}
   {% set m = meta.get(r.id) %}
@@ -16,7 +53,8 @@
     <td>{{ r.created_at.strftime('%Y-%m-%d') }}</td>
     <td>{% if m %}<span class="chip">{{ m.badge }}</span>{% endif %}</td>
     <td>
-      {% if m and m.can_act %}
+      {% if r.status != 'pending' %}{{ status_pill(r.status) }}
+      {% elif m and m.can_act %}
       <form method="post" action="{{ url_for('views.decide_leave', req_id=r.id) }}" class="inlineform">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="text" name="comment" placeholder="Comment (optional)" size="16">
@@ -27,10 +65,12 @@
     </td>
   </tr>
   {% else %}
-  <tr><td colspan="8" class="muted">No pending requests.</td></tr>
+  <tr><td colspan="8" class="muted">No {{ status }} leave requests.</td></tr>
   {% endfor %}
 </table></div>
+{% endif %}
 
+{% if process in ('all', 'regularisation') and status == 'pending' %}
 <h2>Regularisation Awaiting Your Action</h2>
 <div class="tbl-wrap"><table class="tbl">
   <tr><th>Employee</th><th>Date</th><th>Reason</th><th>Chain</th><th></th></tr>
@@ -44,13 +84,15 @@
   </tr>
   {% else %}<tr><td colspan="5" class="muted">Nothing awaiting you.</td></tr>{% endfor %}
 </table></div>
+{% endif %}
 
+{% if process in ('all', 'employee_creation') and status == 'pending' %}
 <h2>Employee Creations Awaiting Your Action</h2>
 <div class="tbl-wrap"><table class="tbl">
   <tr><th>Employee ID</th><th>Name</th><th>Department</th><th>Designation</th><th>Chain</th><th></th></tr>
   {% for it in creation_items %}
   <tr>
-    <td>{{ it.user.id }}</td>
+    <td><a href="{{ url_for('hrms.employee_review', uid=it.user.id) }}"><strong>{{ it.user.id }}</strong></a></td>
     <td>{{ it.user.name }}</td>
     <td>{{ it.user.department or '-' }}</td>
     <td>{{ it.user.designation or '-' }}</td>
@@ -59,7 +101,9 @@
   </tr>
   {% else %}<tr><td colspan="6" class="muted">Nothing awaiting you.</td></tr>{% endfor %}
 </table></div>
+{% endif %}
 
+{% if process in ('all', 'expense') and status == 'pending' %}
 <h2>Expense Claims Awaiting Your Action</h2>
 <div class="tbl-wrap"><table class="tbl">
   <tr><th>Claim</th><th>Employee</th><th>Category</th><th>Expense date</th><th>Amount</th><th>Description</th><th>Chain</th><th>Decision</th></tr>
@@ -83,7 +127,9 @@
   </tr>
   {% else %}<tr><td colspan="8" class="muted">Nothing awaiting you.</td></tr>{% endfor %}
 </table></div>
+{% endif %}
 
+{% if process in ('all', 'shift_swap') and status == 'pending' %}
 <h2>Shift Swaps Awaiting Your Action</h2>
 <div class="tbl-wrap"><table class="tbl">
   <tr><th>Swap</th><th>Requester</th><th>Counterpart</th><th>Exchange</th><th>Rest-gap</th><th>Chain</th><th>Decision</th></tr>
@@ -98,7 +144,7 @@
       <br><span class="muted small">{{ s.requester_id }} &harr; {{ s.counterpart_user_id }}</span>
     </td>
     <td>
-      {% for f in it.flags %}<span class="badge warn">Rest-gap risk</span><br><span class="muted small">{{ f }}</span><br>{% else %}<span class="muted">OK</span>{% endfor %}
+      {% for f in it.flags %}<span class="pill pill-amber">Rest-gap risk</span><br><span class="muted small">{{ f }}</span><br>{% else %}<span class="muted">OK</span>{% endfor %}
     </td>
     <td><span class="chip">{{ it.badge }}</span></td>
     <td>
@@ -112,4 +158,5 @@
   </tr>
   {% else %}<tr><td colspan="7" class="muted">Nothing awaiting you.</td></tr>{% endfor %}
 </table></div>
+{% endif %}
 {% endblock %}

@@ -1,9 +1,29 @@
 {% extends "base.html" %}
+{% from "_frappe_pills.html" import status_pill %}
 {% block title %}My Documents{% endblock %}
 {% block content %}
-<h2>My Documents</h2>
-<p class="muted">Upload your vital documents (passport, Emirates ID, certificates). HR verifies each
-document; verified documents cannot be edited by you (upload a new version instead).</p>
+{% include "_frappe_css.html" %}
+{% set title = "My Documents" %}
+{% set desc = "Upload your vital documents (passport, Emirates ID, certificates). HR verifies each document; verified documents cannot be edited by you (upload a new version instead)." %}
+{% set crumb = '<a href="' + url_for('views.dashboard') + '">Me</a><span class="sep">/</span>My Documents' %}
+{% include "_frappe_list_header.html" %}
+
+<div class="filter-row">
+  <form method="get" action="{{ url_for('docs.my_documents') }}" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+    <label>Document type
+      <select name="doc_type">
+        <option value="">All types</option>
+        {% for c in categories %}
+        <option value="{{ c }}" {% if doc_type == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <span class="fbtns">
+      <button class="btn small primary" type="submit">Filter</button>
+      <a class="btn small" href="{{ url_for('docs.my_documents') }}">Clear</a>
+    </span>
+  </form>
+</div>
 
 <div class="formcard">
 <h3>Upload Document</h3>
@@ -23,6 +43,7 @@ document; verified documents cannot be edited by you (upload a new version inste
 </div>
 
 <h3>Current Documents</h3>
+{% if items %}
 <div class="tbl-wrap">
 <table class="tbl">
   <tr><th>Category</th><th>Title</th><th>Issue</th><th>Expiry</th><th>Status</th><th>Uploaded</th><th></th></tr>
@@ -30,22 +51,26 @@ document; verified documents cannot be edited by you (upload a new version inste
   <tr>
     <td>{{ d.category }}</td><td>{{ d.title }}</td>
     <td>{{ d.issue_date or '-' }}</td><td>{{ d.expiry_date or '-' }}</td>
-    <td><span class="badge {{ 'approved' if d.status=='verified' else d.status }}">{{ d.status }}</span></td>
+    <td>{{ status_pill(d.status) }}</td>
     <td>{{ d.created_at.strftime('%Y-%m-%d') }}</td>
     <td><a class="btn small" href="{{ url_for('docs.download', doc_id=d.id) }}">Download</a></td>
   </tr>
-  {% else %}
-  <tr><td colspan="7" class="muted">No documents yet.</td></tr>
   {% endfor %}
 </table>
 </div>
+{% else %}
+{% set empty_title = "No documents found" %}
+{% set empty_hint = "No documents match the current filter. Upload your first document with the form above." %}
+{% set empty_icon = "📄" %}
+{% include "_frappe_empty.html" %}
+{% endif %}
 {% if history %}
 <h3>Older Versions</h3>
 <div class="tbl-wrap">
 <table class="tbl">
   <tr><th>Category</th><th>Title</th><th>Status</th><th>Uploaded</th><th></th></tr>
   {% for d in history %}
-  <tr><td>{{ d.category }}</td><td>{{ d.title }}</td><td>{{ d.status }}</td>
+  <tr><td>{{ d.category }}</td><td>{{ d.title }}</td><td>{{ status_pill(d.status) }}</td>
       <td>{{ d.created_at.strftime('%Y-%m-%d') }}</td>
       <td><a class="btn small" href="{{ url_for('docs.download', doc_id=d.id) }}">Download</a></td></tr>
   {% endfor %}

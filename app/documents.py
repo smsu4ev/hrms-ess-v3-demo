@@ -119,13 +119,18 @@ def my_documents():
                 flash("Document uploaded. HR will verify it.", "success")
                 return redirect(url_for("docs.my_documents"))
     items = EmployeeDocument.query.filter_by(
-        user_id=current_user.id, superseded=False)\
-        .order_by(EmployeeDocument.created_at.desc()).all()
+        user_id=current_user.id, superseded=False)
     history = EmployeeDocument.query.filter_by(
-        user_id=current_user.id, superseded=True)\
-        .order_by(EmployeeDocument.created_at.desc()).limit(20).all()
+        user_id=current_user.id, superseded=True)
+    # v3.6: document-type filter.
+    doc_type = (request.args.get("doc_type") or "").strip()
+    if doc_type in DOC_CATEGORIES:
+        items = items.filter_by(category=doc_type)
+        history = history.filter_by(category=doc_type)
+    items = items.order_by(EmployeeDocument.created_at.desc()).all()
+    history = history.order_by(EmployeeDocument.created_at.desc()).limit(20).all()
     return render_template("documents.html", items=items, history=history,
-                           categories=DOC_CATEGORIES)
+                           categories=DOC_CATEGORIES, doc_type=doc_type)
 
 
 def _safe_download_name(name):
