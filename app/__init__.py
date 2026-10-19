@@ -64,6 +64,8 @@ def create_app():
     app.register_blueprint(engagement.engagement_bp)
     from app import approvals  # noqa: E402  (v3.4 approval matrix)
     app.register_blueprint(approvals.approvals_bp)
+    from app import ess_extras  # noqa: E402  (v3.3.1 ESS extras)
+    app.register_blueprint(ess_extras.extras_bp)
 
     @app.before_request
     def enforce_password_change():
@@ -175,6 +177,8 @@ def create_app():
             add_column("final_settlements", "ticket_option", "VARCHAR(20)")
             add_column("final_settlements", "ticket_amount", "FLOAT")
             add_column("shift_patterns", "is_outdoor", "BOOLEAN")
+            # v3.3.1: notification centre tabs (Important vs Events).
+            add_column("notifications", "category", "VARCHAR(20)")
             # New table for idempotent loan recovery (checkfirst = no-op if present).
             from app.models import PayrollLoanRecovery
             PayrollLoanRecovery.__table__.create(db.engine, checkfirst=True)
@@ -192,6 +196,18 @@ def create_app():
             ensure_default_matrices()
         except Exception:
             app.logger.exception("Approval matrix defaults failed")
+        # v3.3.1: backfill notification categories (idempotent).
+        try:
+            from app.engagement import backfill_notification_categories
+            backfill_notification_categories()
+        except Exception:
+            app.logger.exception("Notification category backfill failed")
+        # v3.3.1: letter templates added after the initial seed (idempotent).
+        try:
+            from app.ess_extras import ensure_new_letter_templates
+            ensure_new_letter_templates()
+        except Exception:
+            app.logger.exception("Letter template ensure failed")
         # Private upload folders (never served directly; files go through
         # authenticated routes only). v3.3 adds punches / training / signatures.
         try:
@@ -199,7 +215,8 @@ def create_app():
             import os as _os
             root = upload_root()
             for sub in ("punches", "training", "signatures",
-                        "settlement_receipts", "settlement_payments"):
+                        "settlement_receipts", "settlement_payments",
+                        "expenses", "letter_uploads"):
                 _os.makedirs(_os.path.join(root, sub), exist_ok=True)
         except Exception:
             app.logger.exception("Upload folder setup failed")

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}People Directory{% endblock %}
+{% block content %}
+<h2>People Directory</h2>
+<p class="muted">Find colleagues by name, designation or department.</p>
+<form method="get" class="inlineform">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search name, designation, department" size="36">
+  <button class="btn small primary" type="submit">Search</button>
+  {% if q %}<a class="btn small" href="{{ url_for('extras.directory') }}">Clear</a>{% endif %}
+</form>
+<div class="tiles">
+  {% for p in people %}
+  {% set m = managers.get(p.reporting_manager) %}
+  <div class="card dir-card">
+    {% if p.photo_path %}
+    <img src="{{ url_for('docs.photo', uid=p.id) }}" alt="" class="dir-photo">
+    {% else %}
+    <div class="dir-photo dir-initials">{{ p.name[:1] if p.name else '?' }}</div>
+    {% endif %}
+    <div><strong>{{ p.name }}</strong></div>
+    <div class="muted small">{{ p.designation or '-' }}</div>
+    <div class="muted small">{{ p.department or '-' }}</div>
+    <div class="muted small">Reports to: {{ m.name if m else '-' }}</div>
+  </div>
+  {% else %}
+  <p class="muted">No employees found.</p>
+  {% endfor %}
+</div>
+{% endblock %}

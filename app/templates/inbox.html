@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}My Inbox{% endblock %}
+{% block content %}
+<h2>My Inbox</h2>
+<p class="muted">Everything that needs your action, in one place.</p>
+
+<h3>Approvals awaiting my decision ({{ tasks.approvals|length }})</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Type</th><th>Subject</th><th>Chain</th><th></th></tr>
+  {% for i in tasks.approvals %}
+  <tr>
+    <td>{{ i.label }}</td>
+    <td>{{ i.subject }}</td>
+    <td><span class="chip">{{ i.badge }}</span></td>
+    <td><a class="btn small" href="{{ i.link }}">Open</a></td>
+  </tr>
+  {% else %}<tr><td colspan="4" class="muted">Nothing awaiting your decision.</td></tr>{% endfor %}
+</table></div>
+
+<h3>Mandatory notices ({{ tasks.notices|length }})</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Notice</th><th>Published</th><th></th></tr>
+  {% for n in tasks.notices %}
+  <tr>
+    <td>{{ n.title }}</td>
+    <td class="muted">{{ n.created_at.strftime('%d %b %Y') }}</td>
+    <td><a class="btn small" href="{{ url_for('engagement.notice_view', nid=n.id) }}">Read &amp; acknowledge</a></td>
+  </tr>
+  {% else %}<tr><td colspan="3" class="muted">No mandatory notices pending.</td></tr>{% endfor %}
+</table></div>
+
+<h3>Job descriptions to acknowledge ({{ tasks.jds|length }})</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Job description</th><th>Version</th><th>Status</th><th></th></tr>
+  {% for j in tasks.jds %}
+  <tr>
+    <td>{{ j.jd.title }}</td>
+    <td>v{{ j.jd.version }}{% if j.ack.jd_version < j.jd.version %} <span class="badge pending">Re-acknowledgement needed</span>{% endif %}</td>
+    <td>{{ j.ack.status }}</td>
+    <td><a class="btn small" href="{{ url_for('engagement.my_jd') }}">Open</a></td>
+  </tr>
+  {% else %}<tr><td colspan="4" class="muted">All your JDs are acknowledged.</td></tr>{% endfor %}
+</table></div>
+
+<h3>Training to complete ({{ tasks.training|length }})</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Course</th><th>Due</th><th></th></tr>
+  {% for t in tasks.training %}
+  <tr>
+    <td>{{ t.course.name if t.course else 'Training' }}</td>
+    <td class="muted">{{ t.assignment.due_date or '-' }}</td>
+    <td><a class="btn small" href="{{ url_for('engagement.my_training') }}">Open</a></td>
+  </tr>
+  {% else %}<tr><td colspan="3" class="muted">No training outstanding.</td></tr>{% endfor %}
+</table></div>
+
+<h3>My requests in flight ({{ tasks.mine|length }})</h3>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Type</th><th>Detail</th><th>Status</th><th></th></tr>
+  {% for m in tasks.mine %}
+  <tr>
+    <td>{{ m.kind }}</td>
+    <td>{{ m.text }}</td>
+    <td><span class="chip">{{ m.badge }}</span></td>
+    <td><a class="btn small" href="{{ m.link }}">View</a></td>
+  </tr>
+  {% else %}<tr><td colspan="4" class="muted">No requests in flight.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}

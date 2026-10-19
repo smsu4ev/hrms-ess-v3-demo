@@ -420,6 +420,8 @@ logout()
 login("T33-BD", "pw-T33-BD")
 r = client.get("/notifications")
 check("notifications list 200", r.status_code == 200)
+# v3.3.1: celebration notifications live in the Events tab now.
+r = client.get("/notifications?tab=event")
 check("notifications list shows wish", b"wished you" in r.data)
 with app.app_context():
     nn = Notification.query.filter_by(kind="wish",

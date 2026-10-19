@@ -716,10 +716,14 @@ PLACEHOLDER_RE = re.compile(r"\{\{(\w+)\}\}")
 SALARY_PLACEHOLDERS = {"basic_salary", "monthly_salary"}
 
 
-def merge_placeholders(body, user):
+def merge_placeholders(body, user, extra=None):
     """Mail-merge a letter template. Salary figures prefer the current
     SalaryAssignment values (component-based), falling back to the legacy
-    User.basic_salary / User.monthly_salary fields for old records."""
+    User.basic_salary / User.monthly_salary fields for old records.
+
+    `extra` (dict) supplies additional placeholders, e.g. {"purpose": ...}
+    for the No Objection Certificate (v3.3.1).
+    """
     comp = None
     if getattr(user, "visa_company_id", None):
         comp = Company.query.get(user.visa_company_id)
@@ -746,6 +750,8 @@ def merge_placeholders(body, user):
         "monthly_salary": f"{monthly:.2f}",
         "date": date.today().isoformat(),
     }
+    if extra:
+        values.update({k: (v or "") for k, v in extra.items()})
 
     def repl(m):
         return values.get(m.group(1), "")

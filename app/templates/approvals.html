@@ -59,4 +59,28 @@
   </tr>
   {% else %}<tr><td colspan="6" class="muted">Nothing awaiting you.</td></tr>{% endfor %}
 </table></div>
+
+<h2>Expense Claims Awaiting Your Action</h2>
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Claim</th><th>Employee</th><th>Category</th><th>Expense date</th><th>Amount</th><th>Description</th><th>Chain</th><th>Decision</th></tr>
+  {% for it in expense_items %}
+  <tr>
+    <td>#{{ it.claim.id }}</td>
+    <td>{{ it.claim.user_id }}</td>
+    <td>{{ it.claim.category }}</td>
+    <td>{{ it.claim.claim_date }}</td>
+    <td>AED {{ '%.2f'|format(it.claim.amount) }}</td>
+    <td>{{ it.claim.description or '-' }}</td>
+    <td><span class="chip">{{ it.badge }}</span></td>
+    <td>
+      <form method="post" action="{{ url_for('extras.decide_expense', claim_id=it.claim.id) }}" class="inlineform">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="text" name="comment" placeholder="Comment (optional)" size="16">
+        <button class="btn small primary" type="submit" name="action" value="approve">Approve</button>
+        <button class="btn small danger" type="submit" name="action" value="reject">Reject</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}<tr><td colspan="8" class="muted">Nothing awaiting you.</td></tr>{% endfor %}
+</table></div>
 {% endblock %}

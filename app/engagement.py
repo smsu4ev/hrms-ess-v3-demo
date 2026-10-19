@@ -83,10 +83,34 @@ def admin_required(fn):
     return wrapper
 
 
-def notify_user(user_id, kind, title, body=None, link=None, ref_id=None):
-    """Queue one notification row. Committed by the caller."""
+def notify_user(user_id, kind, title, body=None, link=None, ref_id=None,
+                category="important"):
+    """Queue one notification row. Committed by the caller.
+
+    category: 'important' (default — notices, approvals, JD, training,
+    payroll, expenses, letters, documents) or 'event' (celebration
+    alerts: birthday/anniversary broadcasts and wishes).
+    """
     db.session.add(Notification(user_id=user_id, kind=kind, title=title,
-                                body=body, link=link, ref_id=ref_id))
+                                body=body, link=link, ref_id=ref_id,
+                                category=category))
+
+
+CELEBRATION_KINDS = ("birthday", "anniversary", "wish")
+
+
+def backfill_notification_categories():
+    """v3.3.1: give every notification a category. Rows that pre-date the
+    column (or have a NULL category) default to 'important'; rows whose
+    kind is celebration-related become 'event'. Idempotent."""
+    from sqlalchemy import text
+    db.session.execute(text(
+        "UPDATE notifications SET category='important' "
+        "WHERE category IS NULL"))
+    db.session.execute(text(
+        "UPDATE notifications SET category='event' "
+        "WHERE kind IN ('birthday', 'anniversary', 'wish')"))
+    db.session.commit()
 
 
 def active_users(exclude_id=None):
@@ -592,9 +616,17 @@ def visible_notices(user, limit=3):
 @engagement_bp.route("/notifications")
 @login_required
 def notifications():
-    items = Notification.query.filter_by(user_id=current_user.id)\
+    tab = (request.args.get("tab") or "important").strip()
+    if tab not in ("important", "event"):
+        tab = "important"
+    base = Notification.query.filter_by(user_id=current_user.id)
+    items = base.filter_by(category=tab)\
         .order_by(Notification.created_at.desc()).limit(50).all()
-    return render_template("notifications.html", items=items)
+    imp_unread = base.filter_by(category="important",
+                                is_read=False).count()
+    ev_unread = base.filter_by(category="event", is_read=False).count()
+    return render_template("notifications.html", items=items, tab=tab,
+                           imp_unread=imp_unread, ev_unread=ev_unread)
 
 
 @engagement_bp.route("/notifications/read/<int:nid>", methods=["POST"])
@@ -611,10 +643,17 @@ def notification_read(nid):
 @engagement_bp.route("/notifications/read-all", methods=["POST"])
 @login_required
 def notifications_read_all():
-    Notification.query.filter_by(user_id=current_user.id,
-                                 is_read=False).update({"is_read": True})
+    # v3.3.1: mark-all-read acts per tab; without a valid tab it clears all.
+    tab = (request.form.get("tab") or "").strip()
+    q = Notification.query.filter_by(user_id=current_user.id,
+                                     is_read=False)
+    if tab in ("important", "event"):
+        q = q.filter_by(category=tab)
+    q.update({"is_read": True})
     db.session.commit()
-    return redirect(url_for("engagement.notifications"))
+    return redirect(url_for("engagement.notifications",
+                            tab=tab if tab in ("important", "event")
+                            else None))
 
 
 # ---------------- celebrations ----------------
@@ -657,7 +696,8 @@ def ensure_todays_celebrations():
                 notify_user(other.id, kind,
                             f"It's {u.name}'s {label} today!",
                             "Send your wishes and reactions.",
-                            link=_link("engagement.celebrations"), ref_id=post.id)
+                            link=_link("engagement.celebrations"), ref_id=post.id,
+                            category="event")
             made.append(post)
     db.session.commit()
     return made
@@ -734,7 +774,8 @@ def celebrations():
         if new_message and target:
             notify_user(target.id, "wish",
                         f"{current_user.name} wished you: {message}",
-                        link=_link("engagement.celebrations"), ref_id=pid)
+                        link=_link("engagement.celebrations"), ref_id=pid,
+                        category="event")
         audit_record("celebration_wish",
                      f"post #{pid} by {current_user.id}",
                      entity="celebration", entity_id=pid,

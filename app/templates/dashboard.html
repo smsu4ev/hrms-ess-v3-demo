@@ -37,6 +37,27 @@
     {% if approvals_pending %}<span class="t-badge">{{ approvals_pending }}</span>{% endif %}
   </a>
   {% endif %}
+  <a class="tile" href="{{ url_for('extras.inbox') }}">
+    <span class="t-ico">{{ icon('mail') }}</span><span class="t-lbl">Inbox</span>
+    <div class="t-sub">My tasks &amp; actions</div>
+    {% if inbox_total %}<span class="t-badge">{{ inbox_total }}</span>{% endif %}
+  </a>
+  <a class="tile" href="{{ url_for('extras.directory') }}">
+    <span class="t-ico">{{ icon('users') }}</span><span class="t-lbl">Directory</span>
+    <div class="t-sub">People &amp; org chart</div>
+  </a>
+  <a class="tile" href="{{ url_for('extras.team_calendar') }}">
+    <span class="t-ico">{{ icon('calendar') }}</span><span class="t-lbl">Team Calendar</span>
+    <div class="t-sub">Who is on leave</div>
+  </a>
+  <a class="tile" href="{{ url_for('extras.my_expenses') }}">
+    <span class="t-ico">{{ icon('money') }}</span><span class="t-lbl">Expenses</span>
+    <div class="t-sub">Claims &amp; reimbursements</div>
+  </a>
+  <a class="tile" href="{{ url_for('extras.my_letters') }}">
+    <span class="t-ico">{{ icon('file') }}</span><span class="t-lbl">Letter Requests</span>
+    <div class="t-sub">Ask HR for a letter</div>
+  </a>
   {% if current_user.is_admin %}
   <a class="tile admin-tile" href="{{ url_for('hrms.employees') }}">
     <span class="t-ico">{{ icon('users') }}</span><span class="t-lbl">Employee Central</span>
@@ -58,6 +79,22 @@
   {% endif %}
   {% if current_user.is_admin and expiring_docs %}
   <div class="card danger-card"><div class="num">{{ expiring_docs|length }}</div><div class="lbl">Documents expiring soon</div></div>
+  {% endif %}
+  {% if inbox_total %}
+  <div class="card warn"><div class="num">{{ inbox_total }}</div><div class="lbl">My tasks</div>
+    <ul class="task-list">
+      {% for t in inbox_items %}
+      <li><a href="{{ t.link }}">{{ t.text }}</a></li>
+      {% endfor %}
+    </ul>
+    <a class="btn small" href="{{ url_for('extras.inbox') }}">Open inbox</a>
+  </div>
+  {% endif %}
+  {% if dept_card %}
+  <div class="card"><div class="num">{{ dept_card.staff }}</div><div class="lbl">Department today — {{ dept_card.date.strftime('%d %b') }}</div>
+    <div class="muted small">{{ dept_card.absent }} absent · {{ dept_card.vacation }} on vacation</div>
+    <a class="btn small" href="{{ url_for('extras.team_overview') }}">Team overview</a>
+  </div>
   {% endif %}
 </div>
 {% if current_user.is_admin and expiring_docs %}

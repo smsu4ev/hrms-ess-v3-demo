@@ -155,6 +155,42 @@ DEFAULT_LETTER_TEMPLATES = {
         "This certificate is issued upon the employee's request.\n\n"
         "Yours sincerely,\nHR Department, {{company}}"
     ),
+    # v3.3.1: letter-request templates (no salary figures).
+    "Employment Certificate": (
+        "EMPLOYMENT CERTIFICATE\n\n"
+        "Date: {{date}}\n\n"
+        "To Whom It May Concern,\n\n"
+        "This is to certify that {{employee_name}} (Employee ID: "
+        "{{employee_id}}) is employed with {{company}} as {{designation}} "
+        "in the {{department}} department, having joined on "
+        "{{joining_date}}.\n\n"
+        "This certificate is issued upon the employee's request.\n\n"
+        "Yours sincerely,\nHR Department, {{company}}"
+    ),
+    "Experience Letter": (
+        "EXPERIENCE LETTER\n\n"
+        "Date: {{date}}\n\n"
+        "To Whom It May Concern,\n\n"
+        "This letter confirms that {{employee_name}} (Employee ID: "
+        "{{employee_id}}) has been working with {{company}} as "
+        "{{designation}} in the {{department}} department since "
+        "{{joining_date}}.\n\n"
+        "During this period, their conduct and performance have been found "
+        "satisfactory.\n\n"
+        "We wish them success in their future endeavours.\n\n"
+        "Yours sincerely,\nHR Department, {{company}}"
+    ),
+    "No Objection Certificate": (
+        "NO OBJECTION CERTIFICATE\n\n"
+        "Date: {{date}}\n\n"
+        "To Whom It May Concern,\n\n"
+        "{{company}} has no objection to {{employee_name}} (Employee ID: "
+        "{{employee_id}}, {{designation}}, {{department}}) regarding the "
+        "following matter:\n\n"
+        "{{purpose}}\n\n"
+        "This certificate is issued upon the employee's request.\n\n"
+        "Yours sincerely,\nHR Department, {{company}}"
+    ),
 }
 
 # Demo visa companies (fake). Production values go into Company records.

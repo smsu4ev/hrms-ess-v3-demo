@@ -27,6 +27,7 @@
 <div class="layout">
   <nav class="sidebar" id="sidebar" aria-label="Main navigation">
     <a href="{{ url_for('views.dashboard') }}"><span class="nav-ico">{{ icon('home') }}</span><span class="nav-txt">Dashboard</span></a>
+    <a href="{{ url_for('extras.inbox') }}"><span class="nav-ico">{{ icon('mail') }}</span><span class="nav-txt">Inbox</span></a>
     <a href="{{ url_for('views.leave') }}"><span class="nav-ico">{{ icon('calendar') }}</span><span class="nav-txt">Leave</span></a>
     <a href="{{ url_for('views.attendance') }}"><span class="nav-ico">{{ icon('clock') }}</span><span class="nav-txt">Attendance</span></a>
     <a href="{{ url_for('views.my_roster') }}"><span class="nav-ico">{{ icon('calendar') }}</span><span class="nav-txt">My Roster</span></a>
@@ -43,6 +44,7 @@
     {% if current_user.is_manager %}
     <div class="navhead">Manager</div>
     <a href="{{ url_for('views.approvals') }}"><span class="nav-ico">{{ icon('check') }}</span><span class="nav-txt">Leave Approvals</span></a>
+    <a href="{{ url_for('extras.team_overview') }}"><span class="nav-ico">{{ icon('users') }}</span><span class="nav-txt">Team Overview</span></a>
     <a href="{{ url_for('views.regularisation_approvals') }}"><span class="nav-ico">{{ icon('pencil') }}</span><span class="nav-txt">Regularisation Approvals</span></a>
     <a href="{{ url_for('views.evaluations_manage') }}"><span class="nav-ico">{{ icon('star') }}</span><span class="nav-txt">Evaluations</span></a>
     <a href="{{ url_for('views.grievance_inbox') }}"><span class="nav-ico">{{ icon('chat') }}</span><span class="nav-txt">Grievance Inbox</span></a>

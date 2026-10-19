@@ -1,11 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Notifications{% endblock %}
 {% block content %}
-<h2>Notifications</h2>
+<h2>Notification Centre</h2>
+<div class="tabs">
+  <a class="tab {% if tab == 'important' %}active{% endif %}" href="{{ url_for('engagement.notifications', tab='important') }}">Important Updates{% if imp_unread %} <span class="nbadge">{{ imp_unread }}</span>{% endif %}</a>
+  <a class="tab {% if tab == 'event' %}active{% endif %}" href="{{ url_for('engagement.notifications', tab='event') }}">Events{% if ev_unread %} <span class="nbadge">{{ ev_unread }}</span>{% endif %}</a>
+</div>
 {% if items %}
-<form method="post" action="{{ url_for('engagement.notifications_read_all') }}" style="margin-bottom:10px">
+<form method="post" action="{{ url_for('engagement.notifications_read_all') }}" style="margin:10px 0">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <button class="btn small" type="submit">Mark all as read</button>
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <button class="btn small" type="submit">Mark all as read (this tab)</button>
 </form>
 <div class="notif-list">
 {% for n in items %}
@@ -24,6 +29,6 @@
 {% endfor %}
 </div>
 {% else %}
-<p class="muted">No notifications yet.</p>
+<p class="muted">No {{ 'important updates' if tab == 'important' else 'events' }} yet.</p>
 {% endif %}
 {% endblock %}

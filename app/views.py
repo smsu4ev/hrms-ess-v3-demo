@@ -71,6 +71,11 @@ def dashboard():
     ensure_todays_celebrations()
     notices = visible_notices(current_user, limit=3)
     mandatory = pending_mandatory_notices(current_user)
+    # v3.3.1: unified inbox summary for the My Tasks card.
+    from app.ess_extras import inbox_summary, dept_today
+    _inbox = inbox_summary(current_user)
+    inbox_total, inbox_items = _inbox["total"], _inbox["items"]
+    dept_card = dept_today(current_user)
     from app.models import CelebrationPost
     from datetime import date as _date
     today = _date.today()
@@ -86,6 +91,8 @@ def dashboard():
                            approvals_pending=approvals_pending,
                            expiring_docs=expiring_docs,
                            notices=notices, mandatory=mandatory,
+                           inbox_total=inbox_total, inbox_items=inbox_items,
+                           dept_card=dept_card,
                            todays_posts=todays_posts, post_users=users)
 
 
@@ -410,7 +417,7 @@ def approvals():
         User.id.in_([i["req"].user_id for i in leave_items])).all()} \
         if leave_items else {}
     # --- unified inbox: other chains awaiting this user
-    reg_items, creation_items = [], []
+    reg_items, creation_items, expense_items = [], [], []
     for inst in inbox_for(current_user):
         if inst.process_key == "regularisation":
             rr = RegularisationRequest.query.get(int(inst.ref_id))
@@ -422,12 +429,19 @@ def approvals():
             if u is not None and u.employment_status == "pending_approval":
                 creation_items.append({"user": u, "instance": inst,
                                        "badge": step_badge(inst)})
+        elif inst.process_key == "expense":
+            from app.models import ExpenseClaim
+            claim = ExpenseClaim.query.get(int(inst.ref_id))
+            if claim is not None and claim.status == "pending":
+                expense_items.append({"claim": claim, "instance": inst,
+                                      "badge": step_badge(inst)})
     return render_template("approvals.html",
                            items=[i["req"] for i in leave_items],
                            meta={i["req"].id: i for i in leave_items},
                            users=users, leave_types=app_config.LEAVE_TYPES,
                            reg_items=reg_items,
-                           creation_items=creation_items)
+                           creation_items=creation_items,
+                           expense_items=expense_items)
 
 
 def _leave_approve_side_effects(req, comment):

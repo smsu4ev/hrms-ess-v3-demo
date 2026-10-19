@@ -178,7 +178,7 @@ def ensure_demo_users():
                                     _seed_evaluations,
                                     _seed_v3_extras, _seed_v31_extras,
                                     _seed_v32_extras, _seed_v33_extras,
-                                    _seed_v34_extras)
+                                    _seed_v34_extras, _seed_v331_extras)
     import config as app_config
 
     # v3.3: GST "today" so birthday/anniversary demos match the app's
@@ -235,6 +235,7 @@ def ensure_demo_users():
     _seed_v32_extras()
     _seed_v33_extras()
     _seed_v34_extras()  # v3.4: HR flags + demo approval chains
+    _seed_v331_extras()  # v3.3.1: demo expense claims + letter requests
 
     # Backfill DOBs for users that pre-date the v3.3 column.
     for spec in DEMO_USERS:

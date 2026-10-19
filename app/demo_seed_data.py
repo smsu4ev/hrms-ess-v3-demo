@@ -693,3 +693,94 @@ def _seed_v34_extras():
         fatima.is_hr_staff = True
     db.session.flush()
     set_demo_matrices()
+
+
+def _seed_v331_extras():
+    """v3.3.1 ESS extras: demo expense claims, letter requests.
+
+    Idempotent: rows are seeded only when the tables are empty.
+    """
+    from app import db
+    from app.models import (User, ExpenseClaim, LetterRequest,
+                            LetterTemplate, GeneratedLetter, PayrollInput)
+    from app.approvals import start_instance
+    from app.engagement import notify_user
+    from app.audit import record as audit_record
+    from app.files import store_file
+    today = date.today()
+    pdf = (b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+           b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+           b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>endobj\n"
+           b"trailer<</Root 1 0 R>>\n%%EOF")
+
+    if ExpenseClaim.query.count() == 0:
+        # EMP003: pending claim, sitting at step 1 of the demo expense chain
+        # (reporting_manager = MGR001, then hr_staff).
+        receipt = store_file(pdf, "expenses", "pdf")
+        c1 = ExpenseClaim(user_id="EMP003", claim_date=today,
+                          category="Fuel", amount=245.50,
+                          description="Site visits fuel — demo",
+                          receipt_path=receipt, status="pending")
+        db.session.add(c1)
+        db.session.flush()
+        start_instance("expense", c1.id, "EMP003", "EMP003")
+        # EMP004: approved claim with its payroll input already created
+        # (the engine path is exercised by the test suite).
+        c2 = ExpenseClaim(user_id="EMP004", claim_date=today,
+                          category="Materials", amount=480.00,
+                          description="Grinding discs — demo",
+                          status="approved", decided_by="HRADMIN",
+                          decision_comment="Demo seed")
+        db.session.add(c2)
+        db.session.flush()
+        period = today.strftime("%Y-%m")
+        inp = PayrollInput(period=period, user_id="EMP004",
+                           kind="addition",
+                           label=f"Expense reimbursement (claim #{c2.id})",
+                           amount=480.00, created_by="HRADMIN",
+                           note="Demo seed expense reimbursement")
+        db.session.add(inp)
+        db.session.flush()
+        c2.payroll_input_id = inp.id
+        notify_user("EMP004", "expense", "Expense claim approved",
+                    body=f"Claim #{c2.id} (Materials, AED 480.00) approved — "
+                         f"added to payroll inputs for {period}.",
+                    link="/my-expenses")
+        audit_record("expense_approved",
+                     f"claim #{c2.id} for EMP004: AED 480.00 -> payroll "
+                     f"input {inp.id} ({period}) [demo seed]",
+                     entity="expense", entity_id=c2.id,
+                     field_name="status", old_value="pending",
+                     new_value="approved")
+        db.session.commit()
+
+    if LetterRequest.query.count() == 0:
+        # EMP002: salary certificate request, still submitted.
+        db.session.add(LetterRequest(user_id="EMP002",
+                                    letter_type="salary_certificate",
+                                    purpose="Bank account opening — demo",
+                                    status="submitted"))
+        # EMP001: employment certificate request, fulfilled via mail merge.
+        lr = LetterRequest(user_id="EMP001",
+                           letter_type="employment_certificate",
+                           purpose="Visa file — demo", status="ready",
+                           processed_by="HRADMIN")
+        db.session.add(lr)
+        db.session.flush()
+        tpl = LetterTemplate.query.filter_by(
+            name="Employment Certificate", is_active=True).first()
+        if tpl is not None:
+            from app.payroll_views import merge_placeholders
+            user = db.session.get(User, "EMP001")
+            letter = GeneratedLetter(
+                user_id="EMP001", template_id=tpl.id,
+                rendered_text=merge_placeholders(tpl.body, user),
+                has_salary_data=False, generated_by="HRADMIN")
+            db.session.add(letter)
+            db.session.flush()
+            lr.generated_letter_id = letter.id
+        notify_user("EMP001", "letter", "Your letter is ready",
+                    body="Your Employment Certificate (request "
+                         f"#{lr.id}) is ready to download.",
+                    link="/my-letters")
+        db.session.commit()

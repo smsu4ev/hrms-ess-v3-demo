@@ -900,6 +900,9 @@ class Notification(db.Model):
                         nullable=False, index=True)
     kind = db.Column(db.String(30), default="system", nullable=False)
     # notice|birthday|anniversary|wish|training|jd|system
+    # v3.3.1: 'important' (default) | 'event' — celebration alerts
+    # (birthday/anniversary/wish) are 'event', everything else 'important'.
+    category = db.Column(db.String(20), default="important", nullable=False)
     title = db.Column(db.String(200), nullable=False)
     body = db.Column(db.Text)
     link = db.Column(db.String(200))
@@ -1071,6 +1074,7 @@ APPROVAL_PROCESSES = [
     ("employee_creation", "Employee Creation"),
     ("leave", "Leave"),
     ("regularisation", "Attendance Regularisation"),
+    ("expense", "Expense Claims"),
 ]
 
 APPROVER_TYPES = [
@@ -1221,3 +1225,87 @@ class ApprovalDelegation(db.Model):
     def in_window(self):
         today = datetime.utcnow().date()
         return (self.is_active and self.starts_on <= today <= self.ends_on)
+
+
+# ===================== HRMS+ESS V3.3.1 models =====================
+# ESS extras: expense claims, employee letter requests.
+
+EXPENSE_CATEGORIES = [
+    ("Travel", "Travel"),
+    ("Fuel", "Fuel"),
+    ("Food", "Food"),
+    ("Accommodation", "Accommodation"),
+    ("Materials", "Materials"),
+    ("Other", "Other"),
+]
+
+
+class ExpenseClaim(db.Model):
+    """Employee expense claim, routed through the approval matrix (v3.3.1).
+
+    On final approval an EARNING PayrollInput "Expense reimbursement
+    (claim #<id>)" is created for the claimant in the current period.
+    """
+    __tablename__ = "expense_claims"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"),
+                        nullable=False, index=True)
+    claim_date = db.Column(db.Date, nullable=False)
+    category = db.Column(db.String(40), nullable=False)
+    amount = db.Column(db.Float, default=0.0, nullable=False)
+    description = db.Column(db.String(300))
+    receipt_path = db.Column(db.String(120))  # private upload, optional
+    status = db.Column(db.String(20), default="pending", nullable=False)
+    # pending | approved | rejected
+    payroll_input_id = db.Column(db.Integer,
+                                 db.ForeignKey("payroll_inputs.id"))
+    decided_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    decision_comment = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow,
+                           nullable=False)
+
+    payroll_input = db.relationship("PayrollInput")
+
+
+LETTER_REQUEST_TYPES = [
+    ("salary_certificate", "Salary Certificate"),
+    ("salary_transfer", "Salary Transfer Letter"),
+    ("employment_certificate", "Employment Certificate"),
+    ("experience_letter", "Experience Letter"),
+    ("noc", "No Objection Certificate"),
+]
+
+LETTER_REQUEST_STATUSES = [
+    ("submitted", "Submitted"),
+    ("in_progress", "In Progress"),
+    ("ready", "Ready"),
+    ("delivered", "Delivered"),
+    ("rejected", "Rejected"),
+]
+
+
+class LetterRequest(db.Model):
+    """Employee request for an HR letter (v3.3.1).
+
+    Fulfilled either by generating from the mail-merge letters engine
+    (generated_letter_id) or by HR uploading a signed PDF (uploaded_path).
+    """
+    __tablename__ = "letter_requests"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(20), db.ForeignKey("users.id"),
+                        nullable=False, index=True)
+    letter_type = db.Column(db.String(40), nullable=False)
+    purpose = db.Column(db.String(300))
+    status = db.Column(db.String(20), default="submitted", nullable=False)
+    # submitted | in_progress | ready | delivered | rejected
+    generated_letter_id = db.Column(db.Integer,
+                                    db.ForeignKey("generated_letters.id"))
+    uploaded_path = db.Column(db.String(120))  # signed PDF uploaded by HR
+    hr_comment = db.Column(db.String(500))
+    processed_by = db.Column(db.String(20), db.ForeignKey("users.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow,
+                           nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow,
+                           onupdate=datetime.utcnow, nullable=False)
+
+    generated_letter = db.relationship("GeneratedLetter")

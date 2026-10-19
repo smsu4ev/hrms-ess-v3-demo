@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Expense Claims{% endblock %}
+{% block content %}
+<h2>Expense Claims</h2>
+<p class="muted">Approved claim total: <strong>AED {{ '%.2f'|format(approved_total) }}</strong>. Claims are approved via the Approvals inbox; amounts feed payroll inputs.</p>
+
+<form method="get" class="inlineform">
+  <select name="status">
+    <option value="">All statuses</option>
+    {% for s in ['pending', 'approved', 'rejected'] %}
+    <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s|title }}</option>
+    {% endfor %}
+  </select>
+  <select name="dept">
+    <option value="">All departments</option>
+    {% for d in departments %}
+    <option value="{{ d }}" {% if dept == d %}selected{% endif %}>{{ d }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn small" type="submit">Filter</button>
+</form>
+
+<div class="tbl-wrap"><table class="tbl">
+  <tr><th>Claim</th><th>Employee</th><th>Department</th><th>Date</th><th>Category</th><th>Amount</th><th>Description</th><th>Status</th><th>Payroll input</th></tr>
+  {% for c in claims %}
+  {% set u = users.get(c.user_id) %}
+  <tr>
+    <td>#{{ c.id }}</td>
+    <td>{{ u.name if u else c.user_id }} ({{ c.user_id }})</td>
+    <td>{{ u.department if u and u.department else '-' }}</td>
+    <td>{{ c.claim_date }}</td>
+    <td>{{ c.category }}</td>
+    <td>AED {{ '%.2f'|format(c.amount) }}</td>
+    <td>{{ c.description or '-' }}</td>
+    <td><span class="badge {{ c.status }}">{{ c.status|title }}</span></td>
+    <td>{% if c.payroll_input_id %}#{{ c.payroll_input_id }}{% else %}-{% endif %}</td>
+  </tr>
+  {% else %}<tr><td colspan="9" class="muted">No claims.</td></tr>{% endfor %}
+</table></div>
+{% endblock %}
