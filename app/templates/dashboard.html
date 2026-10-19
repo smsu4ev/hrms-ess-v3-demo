@@ -1,162 +1,173 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block title %}Dashboard{% endblock %}
+{% block title %}Home{% endblock %}
+{% macro tile(i, href, ic, tint, label, sub, badge=None, no_pjax=False) -%}
+<a class="tile" style="--i:{{ i }}" href="{{ href }}"{% if no_pjax %} data-no-pjax="1"{% endif %}>
+  <span class="t-chip {{ tint }}">{{ icon(ic) }}</span>
+  <span class="t-lbl">{{ label }}</span>
+  <div class="t-sub">{{ sub }}</div>
+  {% if badge %}<span class="t-badge">{{ badge }}</span>{% endif %}
+</a>
+{%- endmacro %}
 {% block content %}
-<h2>{% if current_user.photo_path %}<img src="{{ url_for('docs.photo', uid=current_user.id) }}" alt="" style="height:48px;width:48px;object-fit:cover;border-radius:50%;vertical-align:middle;margin-right:8px">{% endif %}Welcome, {{ current_user.name }}</h2>
-<p class="muted">{{ current_user.designation }} - {{ current_user.department }} | ID: {{ current_user.id }}</p>
 
-<div class="tiles">
-  <a class="tile" href="{{ url_for('views.leave') }}">
-    <span class="t-ico">{{ icon('calendar') }}</span><span class="t-lbl">Apply Leave</span>
-    <div class="t-sub">Annual, sick, maternity & more (UAE)</div>
-  </a>
-  <a class="tile" href="{{ url_for('views.attendance') }}">
-    <span class="t-ico">{{ icon('clock') }}</span><span class="t-lbl">My Attendance</span>
-    <div class="t-sub">Monthly view</div>
-  </a>
-  <a class="tile" data-no-pjax="1" href="{{ url_for('engagement.punch_page') }}">
-    <span class="t-ico">{{ icon('absent') }}</span><span class="t-lbl">Check In / Out</span>
-    <div class="t-sub">GPS + selfie</div>
-  </a>
-  <a class="tile" href="{{ url_for('engagement.celebrations') }}">
-    <span class="t-ico">{{ icon('star') }}</span><span class="t-lbl">Celebrations</span>
-    <div class="t-sub">Birthdays & anniversaries</div>
-  </a>
-  <a class="tile" href="{{ url_for('views.regularisation') }}">
-    <span class="t-ico">{{ icon('pencil') }}</span><span class="t-lbl">Regularisation</span>
-    <div class="t-sub">Correct missed punches</div>
-  </a>
-  <a class="tile" href="{{ url_for('views.payslips') }}">
-    <span class="t-ico">{{ icon('card') }}</span><span class="t-lbl">Payslips</span>
-    <div class="t-sub">Last 6 months</div>
-  </a>
-  {% if current_user.is_manager %}
-  <a class="tile" href="{{ url_for('views.approvals') }}">
-    <span class="t-ico">{{ icon('check') }}</span><span class="t-lbl">Approvals</span>
-    <div class="t-sub">Leave & regularisation</div>
-    {% if approvals_pending %}<span class="t-badge">{{ approvals_pending }}</span>{% endif %}
-  </a>
-  {% endif %}
-  <a class="tile" href="{{ url_for('extras.inbox') }}">
-    <span class="t-ico">{{ icon('mail') }}</span><span class="t-lbl">Inbox</span>
-    <div class="t-sub">My tasks &amp; actions</div>
-    {% if inbox_total %}<span class="t-badge">{{ inbox_total }}</span>{% endif %}
-  </a>
-  <a class="tile" href="{{ url_for('extras.directory') }}">
-    <span class="t-ico">{{ icon('users') }}</span><span class="t-lbl">Directory</span>
-    <div class="t-sub">People &amp; org chart</div>
-  </a>
-  <a class="tile" href="{{ url_for('extras.team_calendar') }}">
-    <span class="t-ico">{{ icon('calendar') }}</span><span class="t-lbl">Team Calendar</span>
-    <div class="t-sub">Who is on leave</div>
-  </a>
-  <a class="tile" href="{{ url_for('extras.my_expenses') }}">
-    <span class="t-ico">{{ icon('money') }}</span><span class="t-lbl">Expenses</span>
-    <div class="t-sub">Claims &amp; reimbursements</div>
-  </a>
-  <a class="tile" href="{{ url_for('extras.my_letters') }}">
-    <span class="t-ico">{{ icon('file') }}</span><span class="t-lbl">Letter Requests</span>
-    <div class="t-sub">Ask HR for a letter</div>
-  </a>
-  {% if current_user.is_admin %}
-  <a class="tile admin-tile" href="{{ url_for('hrms.employees') }}">
-    <span class="t-ico">{{ icon('users') }}</span><span class="t-lbl">Employee Central</span>
-    <div class="t-sub">HR records & master data</div>
-  </a>
-  <a class="tile admin-tile" href="{{ url_for('hrms.compliance') }}">
-    <span class="t-ico">{{ icon('scales') }}</span><span class="t-lbl">Compliance</span>
-    <div class="t-sub">UAE labour law overview</div>
-  </a>
+{# (a) greeting header #}
+<div class="home-greet">
+  <div>
+    <h2 style="margin:0">Good {{ greet_part }}, {{ greet_name }}</h2>
+    <p class="muted" style="margin:4px 0 0">{{ today_gst.strftime('%A, %d %B %Y') }}{% if current_user.department %} &middot; {{ current_user.department }}{% endif %}{% if current_user.designation %} &middot; {{ current_user.designation }}{% endif %}</p>
+  </div>
+</div>
+
+{# (b) TODAY hero card #}
+<div class="card hero-card">
+  <div class="hero-row">
+    <div class="hero-main">
+      <div class="hero-kicker">Today</div>
+      {% if today_assignment and today_assignment.shift %}
+      <div class="hero-shift">{{ icon('clock') }} <strong>{{ today_assignment.shift.name }}</strong> &middot; {{ today_assignment.shift.start_time }} &ndash; {{ today_assignment.shift.end_time }}</div>
+      {% else %}
+      <div class="hero-shift muted">{{ icon('clock') }} No shift assigned today</div>
+      {% endif %}
+      {% if punched_in %}
+      <div class="hero-status ok">Checked in at {{ punch_in_at }}</div>
+      {% elif punch_out_at %}
+      <div class="hero-status">Checked out at {{ punch_out_at }}{% if punch_in_at %} &middot; in at {{ punch_in_at }}{% endif %}</div>
+      {% else %}
+      <div class="hero-status muted">Not punched in yet</div>
+      {% endif %}
+    </div>
+    <div class="hero-action">
+      {% if punch_disabled %}
+      <span class="btn punch-btn disabled" title="Mobile check-in is disabled by HR policy">Check In</span>
+      <div class="muted small">Check-in disabled by HR policy</div>
+      {% else %}
+      <a class="btn punch-btn{% if not punched_in %} pulse-ring{% endif %}" data-no-pjax="1" href="{{ url_for('engagement.punch_page') }}">{{ 'Check Out' if punched_in else 'Check In' }}</a>
+      {% endif %}
+    </div>
+  </div>
+  {% if is_hr %}
+  <div class="hero-stats">
+    <div class="hstat"><div class="num" data-count="{{ approvals_pending }}">{{ approvals_pending }}</div><div class="lbl">Pending approvals</div></div>
+    <div class="hstat"><div class="num" data-count="{{ visa_expiries_20 }}">{{ visa_expiries_20 }}</div><div class="lbl">Visa expiries (20d)</div></div>
+    <div class="hstat"><div class="num" data-count="{{ open_tickets }}">{{ open_tickets }}</div><div class="lbl">Open tickets</div></div>
+  </div>
+  {% elif current_user.is_manager and dept_card %}
+  <div class="hero-stats">
+    <div class="hstat"><div class="num" data-count="{{ team_present }}">{{ team_present }}</div><div class="lbl">Present today</div></div>
+    <div class="hstat"><div class="num" data-count="{{ team_absent }}">{{ team_absent }}</div><div class="lbl">Absent</div></div>
+    <div class="hstat"><div class="num" data-count="{{ team_on_leave }}">{{ team_on_leave }}</div><div class="lbl">On leave</div></div>
+  </div>
   {% endif %}
 </div>
 
-<div class="cards">
-  <div class="card"><div class="num">{{ present_days }}</div><div class="lbl">Days present this month</div></div>
-  <div class="card"><div class="num">{{ pending_leaves }}</div><div class="lbl">Pending leave requests</div></div>
-  <div class="card"><div class="num">{{ open_grievances }}</div><div class="lbl">Open grievances</div></div>
+{# (c) QUICK TILES #}
+<h3>Quick access</h3>
+<div class="tile-grid">
+  {{ tile(0, url_for('engagement.punch_page'), 'stopwatch', 'sky', 'Check In/Out', 'GPS + selfie', no_pjax=True) }}
+  {{ tile(1, url_for('views.leave'), 'calendar', 'indigo', 'Apply Leave', 'Annual, sick, maternity & more (UAE)', badge=pending_leaves or None) }}
+  {{ tile(2, url_for('views.leave'), 'calendar', 'violet', 'My Leave', 'Balances & requests') }}
+  {{ tile(3, url_for('views.payslips'), 'card', 'emerald', 'My Payslips', 'Last 6 months') }}
+  {{ tile(4, url_for('docs.my_documents'), 'file', 'amber', 'My Documents', 'ID, visa, certificates') }}
+  {{ tile(5, url_for('extras.my_letters'), 'mail', 'sky', 'Request Letter', 'Ask HR for a letter') }}
+  {{ tile(6, url_for('extras.my_expenses'), 'money', 'emerald', 'My Expenses', 'Claims & reimbursements') }}
+  {{ tile(7, url_for('helpdesk.my_tickets'), 'chat', 'violet', 'My Tickets', 'Support tickets') }}
+  {{ tile(8, url_for('engagement.notices'), 'bell', 'amber', 'Notices', 'Company notices', badge=mandatory_count or None) }}
+  {{ tile(9, url_for('extras.directory'), 'users', 'indigo', 'Directory', 'People & org chart') }}
   {% if current_user.is_manager %}
-  <div class="card warn"><div class="num">{{ approvals_pending }}</div><div class="lbl">Approvals waiting</div></div>
+  {{ tile(10, url_for('views.approvals'), 'check', 'rose', 'Approvals', 'Leave & regularisation', badge=approvals_pending or None) }}
+  {{ tile(11, url_for('extras.team_overview'), 'home', 'indigo', 'Team Overview', 'Team today') }}
+  {{ tile(12, url_for('extras.team_calendar'), 'calendar', 'sky', 'Team Calendar', 'Who is on leave') }}
+  {{ tile(13, url_for('roster.roster'), 'clock', 'amber', 'Roster', 'Shift roster') }}
   {% endif %}
-  {% if current_user.is_admin and expiring_docs %}
-  <div class="card danger-card"><div class="num">{{ expiring_docs|length }}</div><div class="lbl">Documents expiring soon</div></div>
+  {% if is_hr %}
+  {% if can_salary %}
+  {{ tile(14, url_for('hrms.employees'), 'users', 'indigo', 'Employees', 'HR records & master data') }}
   {% endif %}
-  {% if inbox_total %}
-  <div class="card warn"><div class="num">{{ inbox_total }}</div><div class="lbl">My tasks</div>
+  {% if can_create_emp %}
+  {{ tile(15, url_for('hrms.employee_new'), 'usercheck', 'emerald', 'Add Employee', 'Onboard a new joiner') }}
+  {% endif %}
+  {% if can_salary %}
+  {{ tile(16, url_for('payroll.runs'), 'money', 'emerald', 'Payroll', 'Runs, WPS & loans') }}
+  {% endif %}
+  {% if current_user.is_admin %}
+  {{ tile(17, url_for('reports.hub'), 'chart', 'violet', 'Reports', 'HR analytics') }}
+  {{ tile(18, url_for('settings.page'), 'building', 'amber', 'HR Settings', 'Toggles & policies') }}
+  {{ tile(19, url_for('approvals.matrix_admin'), 'clipboard', 'rose', 'Approval Matrix', 'Approval chains') }}
+  {% endif %}
+  {% endif %}
+</div>
+
+{# (d) MY TASKS card #}
+<div class="cards">
+  <div class="card">
+    <h3 style="margin-top:0">My tasks{% if inbox_total %} <span class="t-badge">{{ inbox_total }}</span>{% endif %}</h3>
+    {% if inbox_items %}
     <ul class="task-list">
       {% for t in inbox_items %}
       <li><a href="{{ t.link }}">{{ t.text }}</a></li>
       {% endfor %}
     </ul>
+    {% else %}
+    <p class="muted">Nothing waiting on you &mdash; all caught up.</p>
+    {% endif %}
     <a class="btn small" href="{{ url_for('extras.inbox') }}">Open inbox</a>
   </div>
+
+  {# (e) CELEBRATIONS strip + latest NOTICE card #}
+  {% if todays_posts %}
+  <div class="card">
+    <h3 style="margin-top:0">Celebrations</h3>
+    <div class="celeb-strip">
+      {% for p in todays_posts %}
+      {% set u = post_users.get(p.user_id) %}
+      <div class="celeb-chip">{{ icon('star') }} <strong>{{ u.name if u else p.user_id }}</strong>
+        <span class="muted">{{ 'Birthday' if p.kind == 'birthday' else p.years ~ ' year anniversary' }}</span></div>
+      {% endfor %}
+    </div>
+    <a class="btn small" href="{{ url_for('engagement.celebrations') }}">Send wishes</a>
+  </div>
   {% endif %}
-  {% if dept_card %}
-  <div class="card"><div class="num">{{ dept_card.staff }}</div><div class="lbl">Department today — {{ dept_card.date.strftime('%d %b') }}</div>
-    <div class="muted small">{{ dept_card.absent }} absent · {{ dept_card.vacation }} on vacation</div>
-    <a class="btn small" href="{{ url_for('extras.team_overview') }}">Team overview</a>
+  {% if notices %}
+  <div class="card">
+    <h3 style="margin-top:0">Latest notice</h3>
+    <p><a href="{{ url_for('engagement.notice_view', nid=notices[0].id) }}">{{ notices[0].title }}</a>
+      {% if notices[0].requires_ack %}<span class="badge pending">Mandatory read</span>{% endif %}</p>
+    <p class="muted small">{{ notices[0].created_at.strftime('%d %b %Y') }}</p>
+    <a class="btn small" href="{{ url_for('engagement.notices') }}">All notices</a>
   </div>
   {% endif %}
 </div>
+
+{# Leave balances (kept from the v2 home, compact). #}
+{% if balances %}
+<div class="card">
+  <h3 style="margin-top:0">Leave balances</h3>
+  <div class="tbl-wrap"><table class="tbl">
+    <tr><th>Leave Type</th><th>Entitled</th><th>Used</th><th>Remaining</th></tr>
+    {% for b in balances %}{% if b.leave_type != 'sick' %}
+    <tr><td>{{ b.leave_type|title }}</td><td>{{ b.entitled }}</td><td>{{ b.used }}</td><td>{{ b.entitled - b.used }}</td></tr>
+    {% endif %}{% endfor %}
+  </table></div>
+  <a class="btn small" href="{{ url_for('views.leave') }}">Apply leave</a>
+</div>
+{% endif %}
+
+{# Admin: compact 30-day document-expiry watchlist (kept from the v2 home). #}
 {% if current_user.is_admin and expiring_docs %}
-<h3>Visa / Passport / Emirates ID Expiries (next 30 days)</h3>
-<div class="tbl-wrap">
-<table class="tbl">
-  <tr><th>Employee</th><th>Document</th><th>Expiry Date</th><th>Days Left</th></tr>
-  {% for e in expiring_docs %}
-  <tr>
-    <td><a href="{{ url_for('hrms.employee_detail', uid=e.user.id) }}">{{ e.user.name }} ({{ e.user.id }})</a></td>
-    <td>{{ e.doc|title }}</td><td>{{ e.date }}</td>
-    <td><span class="badge {% if e.days_left < 0 %}rejected{% elif e.days_left <= 10 %}pending{% else %}late{% endif %}">{{ e.days_left }} days</span></td>
-  </tr>
-  {% endfor %}
-</table>
+<div class="card">
+  <h3 style="margin-top:0">Visa / Passport / Emirates ID Expiries (next 30 days)</h3>
+  <div class="tbl-wrap"><table class="tbl">
+    <tr><th>Employee</th><th>Document</th><th>Expiry Date</th><th>Days Left</th></tr>
+    {% for e in expiring_docs[:8] %}
+    <tr>
+      <td><a href="{{ url_for('hrms.employee_detail', uid=e.user.id) }}">{{ e.user.name }} ({{ e.user.id }})</a></td>
+      <td>{{ e.doc|title }}</td><td>{{ e.date }}</td>
+      <td><span class="badge {% if e.days_left < 0 %}rejected{% elif e.days_left <= 10 %}pending{% else %}late{% endif %}">{{ e.days_left }} days</span></td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% if expiring_docs|length > 8 %}<p class="muted small">+ {{ expiring_docs|length - 8 }} more</p>{% endif %}
 </div>
 {% endif %}
-{% if mandatory %}
-<h3>Action needed</h3>
-<div class="formcard warn-card">
-  <p><strong>{{ mandatory|length }} mandatory notice(s) awaiting your acknowledgement:</strong></p>
-  <ul>
-  {% for n in mandatory %}
-    <li><a href="{{ url_for('engagement.notice_view', nid=n.id) }}">{{ n.title }}</a></li>
-  {% endfor %}
-  </ul>
-</div>
-{% endif %}
-{% if notices %}
-<h3>Notices</h3>
-<div class="tbl-wrap"><table class="tbl">
-  {% for n in notices %}
-  <tr>
-    <td><a href="{{ url_for('engagement.notice_view', nid=n.id) }}">{{ n.title }}</a>
-      {% if n.requires_ack %}<span class="badge pending">Mandatory read</span>{% endif %}</td>
-    <td class="muted">{{ n.created_at.strftime('%d %b %Y') }}</td>
-  </tr>
-  {% endfor %}
-</table></div>
-{% endif %}
-{% if todays_posts %}
-<h3>Today's celebrations</h3>
-<div class="tbl-wrap"><table class="tbl">
-  {% for p in todays_posts %}
-  {% set u = post_users.get(p.user_id) %}
-  <tr>
-    <td>{{ u.name if u else p.user_id }}</td>
-    <td><span class="badge {{ p.kind }}">{{ 'Birthday' if p.kind == 'birthday' else p.years ~ ' year anniversary' }}</span></td>
-    <td><a class="btn small" href="{{ url_for('engagement.celebrations') }}">Send wishes</a></td>
-  </tr>
-  {% endfor %}
-</table></div>
-{% endif %}
-<h3>Leave Balances</h3>
-<div class="tbl-wrap">
-<table class="tbl">
-  <tr><th>Leave Type</th><th>Entitled</th><th>Used</th><th>Remaining</th></tr>
-  {% for b in balances %}{% if b.leave_type != 'sick' %}
-  <tr><td>{{ b.leave_type|title }}</td><td>{{ b.entitled }}</td><td>{{ b.used }}</td><td>{{ b.entitled - b.used }}</td></tr>
-  {% endif %}{% else %}
-  <tr><td colspan="4" class="muted">No balances set up yet.</td></tr>
-  {% endfor %}
-</table>
-</div>
 {% endblock %}

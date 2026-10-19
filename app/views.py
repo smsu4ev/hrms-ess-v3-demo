@@ -67,7 +67,7 @@ def dashboard():
         expiring_docs = get_upcoming_expiries(30)
     # v3.3: engagement — today's celebrations, latest notices, mandatory reads.
     from app.engagement import (ensure_todays_celebrations, visible_notices,
-                                pending_mandatory_notices)
+                                pending_mandatory_notices, gst_now)
     ensure_todays_celebrations()
     notices = visible_notices(current_user, limit=3)
     mandatory = pending_mandatory_notices(current_user)
@@ -84,6 +84,54 @@ def dashboard():
     users = {u.id: u for u in User.query.filter(
         User.id.in_([p.user_id for p in todays_posts])).all()} \
         if todays_posts else {}
+    # ---- v3.7 App-UI home context -------------------------------------
+    # Greeting (GST clock, like the rest of the app).
+    now_gst = gst_now()
+    hour = now_gst.hour
+    greet_part = "morning" if hour < 12 else "afternoon" if hour < 17 \
+        else "evening"
+    greet_name = (current_user.name or current_user.id).split()[0]
+    today_gst = now_gst.date()
+    # Employee TODAY hero: roster assignment + punch status.
+    from app.models import RosterAssignment, PunchRecord
+    from app.settingsutil import get_setting
+    from app.models_v35 import HelpdeskTicket
+    assignment = RosterAssignment.query.filter_by(
+        user_id=current_user.id, date=today_gst).first()
+    punches_today = PunchRecord.query.filter_by(
+        user_id=current_user.id, local_date=today_gst)\
+        .order_by(PunchRecord.punched_at).all()
+    # punched_at is UTC; shift +4 for GST display like the rest of the app.
+    def _gst_hhmm(dt):
+        return (dt + timedelta(hours=4)).strftime("%H:%M") if dt else None
+    last_punch = punches_today[-1] if punches_today else None
+    last_in = next((p for p in reversed(punches_today)
+                    if p.punch_type == "in"), None)
+    last_out = next((p for p in reversed(punches_today)
+                     if p.punch_type == "out"), None)
+    punched_in = last_punch is not None and last_punch.punch_type == "in"
+    punch_in_at = _gst_hhmm(last_in.punched_at) if last_in else None
+    punch_out_at = _gst_hhmm(last_out.punched_at) if last_out else None
+    punch_disabled = get_setting("mobile_checkin", "1") != "1"
+    # Role flags for the tile grid / hero variants.
+    is_hr = bool(current_user.is_admin or current_user.is_hr_staff
+                 or current_user.is_hr_manager)
+    from app.files import salary_visible
+    can_salary = bool(salary_visible(current_user))
+    can_create_emp = is_hr
+    # Manager hero counts (present derived from the dept-day scope).
+    team_present = team_absent = team_on_leave = 0
+    if dept_card:
+        team_absent = dept_card["absent"]
+        team_on_leave = dept_card["vacation"]
+        team_present = max(dept_card["staff"] - team_absent
+                           - team_on_leave, 0)
+    # Admin/HR hero counts.
+    from app.hrms import get_upcoming_expiries as _expiries
+    visa_expiries_20 = (len(_expiries(20)) if is_hr else 0)
+    open_tickets = (HelpdeskTicket.query.filter(
+        HelpdeskTicket.status.in_(["open", "in_progress"])).count()
+        if is_hr else 0)
     return render_template("dashboard.html", balances=balances,
                            pending_leaves=pending_leaves,
                            open_grievances=open_grievances,
@@ -91,9 +139,25 @@ def dashboard():
                            approvals_pending=approvals_pending,
                            expiring_docs=expiring_docs,
                            notices=notices, mandatory=mandatory,
+                           mandatory_count=len(mandatory),
                            inbox_total=inbox_total, inbox_items=inbox_items,
                            dept_card=dept_card,
-                           todays_posts=todays_posts, post_users=users)
+                           todays_posts=todays_posts, post_users=users,
+                           # v3.7 home
+                           greet_part=greet_part, greet_name=greet_name,
+                           today_gst=today_gst,
+                           today_assignment=assignment,
+                           punched_in=punched_in,
+                           punch_in_at=punch_in_at,
+                           punch_out_at=punch_out_at,
+                           punch_disabled=punch_disabled,
+                           team_present=team_present,
+                           team_absent=team_absent,
+                           team_on_leave=team_on_leave,
+                           visa_expiries_20=visa_expiries_20,
+                           open_tickets=open_tickets,
+                           is_hr=is_hr, can_salary=can_salary,
+                           can_create_emp=can_create_emp)
 
 
 # ---------------- Leave ----------------

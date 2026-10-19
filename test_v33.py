@@ -295,8 +295,10 @@ check("HR page shows ack counts header", b"Acknowledged:" in r.data)
 logout()
 login("T33-E1", "pw-T33-E1")
 r = client.get("/")
+# v3.7: the home "Latest notice" card badges mandatory reads
+# ("Mandatory read") instead of the old "Action needed" label.
 check("dashboard flags unacknowledged mandatory notice",
-      b"T33 Mandatory Notice" in r.data and b"Action needed" in r.data)
+      b"T33 Mandatory Notice" in r.data and b"Mandatory read" in r.data)
 r = client.get(f"/notices/{nid}")
 check("notice view 200", r.status_code == 200)
 check("notice view shows Acknowledge action",

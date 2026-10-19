@@ -171,8 +171,17 @@ APPS_DESCRIPTIONS = {
 @desk_bp.route("/apps")
 @login_required
 def apps():
-    """All Apps grid (Frappe app-switcher style) inside the desk shell."""
-    return render_template("apps.html", descriptions=APPS_DESCRIPTIONS)
+    """All Services directory: every workspace with its role-filtered link
+    groups, rendered as headed tile sections (V3.7 App-UI home rework)."""
+    from app.workspaces import visible_workspaces, workspace_nav
+    ws_sections = []
+    for ws in visible_workspaces(current_user):
+        ws_sections.append({"key": ws["key"], "title": ws["title"],
+                            "icon": ws["icon"], "route": ws["route"],
+                            "groups": workspace_nav(current_user,
+                                                    ws["key"])})
+    return render_template("apps.html", descriptions=APPS_DESCRIPTIONS,
+                           ws_sections=ws_sections)
 
 
 # ---------------- Awesome Bar API ----------------

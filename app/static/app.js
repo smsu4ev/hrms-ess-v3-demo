@@ -1,40 +1,13 @@
-/* HRMS + ESS v3.1 - mobile navigation drawer + PJAX app-like navigation.
-   Same-origin script, CSP-safe (default-src 'self', no eval). */
+/* HRMS + ESS v3.7 - app-like navigation (PJAX) + nav sync.
+   Same-origin script, CSP-safe (default-src 'self', no eval).
+   Shell behaviour (drawer open/close, counters) lives in desk.js; after every
+   content swap we call window.__hrmsShellRefresh() (exposed by desk.js). */
 (function () {
   "use strict";
 
   function ready(fn) {
     if (document.readyState !== "loading") { fn(); }
     else { document.addEventListener("DOMContentLoaded", fn); }
-  }
-
-  /* ---------- mobile drawer (v3.6: workspace sidebar) ---------- */
-  function initDrawer() {
-    var toggle = document.getElementById("navToggle");
-    var sidebar = document.getElementById("ws-sidebar");
-    var scrim = document.getElementById("navScrim");
-    if (!toggle || !sidebar) { return; }
-    function openNav() {
-      document.body.classList.add("nav-open");
-      toggle.setAttribute("aria-expanded", "true");
-    }
-    function closeNav() {
-      document.body.classList.remove("nav-open");
-      toggle.setAttribute("aria-expanded", "false");
-    }
-    window.__hrmsCloseNav = closeNav;
-    toggle.addEventListener("click", function () {
-      if (document.body.classList.contains("nav-open")) { closeNav(); }
-      else { openNav(); }
-    });
-    if (scrim) { scrim.addEventListener("click", closeNav); }
-    var links = sidebar.querySelectorAll("a");
-    for (var i = 0; i < links.length; i++) {
-      links[i].addEventListener("click", closeNav);
-    }
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") { closeNav(); }
-    });
   }
 
   /* ---------- PJAX app-like navigation (v3.1) ---------- */
@@ -144,20 +117,16 @@
     }
   }
 
-  /* Active-link highlight across the v3.6 desk shell: workspace sidebar
-     links match by exact path; rail icons match the current workspace key
-     (body data-ws) since workspace home routes differ from deep pages. */
+  /* Active-link highlight across the v3.7 app shell: top-bar links, drawer
+     links and bottom-nav links match by exact path; re-run after every
+     PJAX swap. desk.js expands the drawer group containing the .active
+     link via window.__hrmsShellRefresh(). */
   function markActiveNav(url) {
     try {
       var path = new URL(url, window.location.origin).pathname;
-      var links = document.querySelectorAll("#ws-sidebar a, .rail a, .bottomnav a");
-      var ws = document.body ? document.body.getAttribute("data-ws") : null;
+      var links = document.querySelectorAll("#drawer a, .topbar-links a, .bottomnav a");
       for (var i = 0; i < links.length; i++) {
         var a = links[i];
-        if (a.classList.contains("rail-item") && a.getAttribute("data-ws")) {
-          a.classList.toggle("active", ws && a.getAttribute("data-ws") === ws);
-          continue;
-        }
         var lp;
         try { lp = new URL(a.getAttribute("href"), window.location.origin).pathname; }
         catch (e) { continue; }
@@ -167,10 +136,10 @@
     } catch (e) { /* non-fatal */ }
   }
 
-  /* ---------- workspace sidebar active sync (v3.6) ----------
-     The v3.1 collapsible navgroups are gone with the old grouped sidebar;
-     markActiveNav() now handles sidebar + rail + bottom-nav highlighting
-     and is re-run after every PJAX swap. */
+  /* ---------- drawer group auto-expand sync (v3.7) ----------
+     The v3.6 rail/sidebar collapse logic is gone with the old shell;
+     markActiveNav() handles link highlighting and desk.js auto-expands
+     the drawer group holding the active link; both re-run after PJAX. */
 
   function swapContent(url, html, push) {
     var doc;
@@ -187,11 +156,16 @@
     if (doc.title) { document.title = doc.title; }
     rerunScripts(current);
     markActiveNav(url);
+    // V3.7 page-enter animation + drawer group auto-expand + counters.
+    current.classList.remove("pjax-enter");
+    void current.offsetWidth; // restart the keyframe animation
+    current.classList.add("pjax-enter");
+    if (window.__hrmsShellRefresh) { window.__hrmsShellRefresh(); }
     if (push !== false) {
       try { window.history.pushState({ pjax: true }, "", url); }
       catch (e) { /* ignore */ }
     }
-    if (window.__hrmsCloseNav) { window.__hrmsCloseNav(); }
+    if (window.__hrmsCloseDrawer) { window.__hrmsCloseDrawer(); }
     window.scrollTo(0, 0);
   }
 
@@ -253,7 +227,6 @@
   }
 
   ready(function () {
-    initDrawer();
     initPjax();
   });
 })();

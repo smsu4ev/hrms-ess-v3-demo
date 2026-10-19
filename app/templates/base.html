@@ -6,30 +6,43 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="csrf-token" content="{{ csrf_token() if current_user.is_authenticated else '' }}">
 <title>{% block title %}HRMS{% endblock %} - {{ company_name }}</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=7">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=9">
+{% block head %}{% endblock %}
 </head>
 <body{% if ws_current is defined and ws_current %} data-ws="{{ ws_current.key }}"{% endif %}>
 {% if current_user.is_authenticated %}
 <div id="pjax-progress" aria-hidden="true"></div>
 
-{# ---------- far-left app rail (desktop) ---------- #}
-<nav class="rail" aria-label="Workspaces">
-  <a class="rail-logo" href="{{ url_for('views.dashboard') }}" title="{{ company_name }}"><span class="logo-dot"></span></a>
-  {% if workspaces is defined %}
-  {% for ws in workspaces %}
-  <a href="{{ ws.route }}" class="rail-item{% if ws_current is defined and ws_current and ws.key == ws_current.key %} active{% endif %}" data-ws="{{ ws.key }}" title="{{ ws.title }}" aria-label="{{ ws.title }}"><span class="rail-ico">{{ icon(ws.icon) }}</span></a>
-  {% endfor %}
-  {% endif %}
-  <div class="rail-bottom">
-    <button class="rail-avatar" id="avatarBtn" aria-haspopup="true" aria-expanded="false" title="{{ current_user.name }} ({{ current_user.id }})" aria-label="Account menu">
+{# ================= V3.7 app shell: top bar + drawer ================= #}
+<header class="topbar">
+  <button class="hamburger" id="navToggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="drawer"><span class="h-ico">{{ icon('menu') }}</span></button>
+  <a class="brand" href="{{ url_for('views.dashboard') }}" aria-label="{{ company_name }} home"><span class="logo-dot"></span><span class="brand-name">800 Retail HR</span></a>
+  <nav class="topbar-links" aria-label="Quick links">
+    <a href="{{ url_for('views.dashboard') }}">Home</a>
+    <a href="/apps">All Services</a>
+    {% if current_user.is_manager or current_user.is_admin %}
+    <a href="/ws/my-team">My Team</a>
+    {% endif %}
+  </nav>
+  <span class="tb-spacer"></span>
+  <button class="tb-search" id="awesomeOpen" type="button" aria-label="Search (Ctrl+K)">
+    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <span class="tb-search-txt">Search</span>
+    <kbd>Ctrl K</kbd>
+  </button>
+  <button class="tb-bell" id="notifOpen" type="button" aria-label="Notifications">
+    {{ icon('bell') }}{% if unread_count %}<span class="nbadge" id="notifBadge">{{ unread_count }}</span>{% endif %}
+  </button>
+  <div class="tb-avatar">
+    <button id="avatarBtn" aria-haspopup="true" aria-expanded="false" title="{{ current_user.name }} ({{ current_user.id }})" aria-label="Account menu">
       <span class="avatar-circle">{{ (current_user.name or 'U')[:1]|upper }}</span>
     </button>
     <div class="avatar-menu" id="avatarMenu" hidden>
       <div class="avatar-menu-head"><strong>{{ current_user.name }}</strong><span class="muted small">{{ current_user.id }} · {{ current_user.role }}</span></div>
       <a href="{{ url_for('views.profile') }}"><span class="m-ico">{{ icon('user') }}</span>My Profile</a>
-      <button type="button" id="themeToggle"><span class="m-ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></span>Toggle Theme</button>
-      {% if current_user.is_admin and desk_settings_url is defined and desk_settings_url %}
-      <a href="{{ desk_settings_url }}"><span class="m-ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z"/></svg></span>Settings</a>
+      <button type="button" id="themeToggle"><span class="m-ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></span>Theme</button>
+      {% if (current_user.is_admin or current_user.is_hr_manager or current_user.is_hr_staff) and desk_settings_url is defined and desk_settings_url %}
+      <a href="{{ desk_settings_url }}"><span class="m-ico"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z"/></svg></span>HR Settings</a>
       {% endif %}
       <form method="post" action="{{ url_for('auth.logout') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -37,76 +50,45 @@
       </form>
     </div>
   </div>
+</header>
+
+{# ---------- navigation drawer (replaces rail + workspace sidebar) ---------- #}
+<div class="drawer-scrim" id="drawerScrim" hidden aria-hidden="true"></div>
+<nav class="drawer" id="drawer" aria-label="Navigation" aria-hidden="true">
+  <div class="drawer-head">
+    <span class="logo-dot"></span><span class="brand-name">800 Retail HR</span>
+    <button class="drawer-close" id="drawerClose" type="button" aria-label="Close navigation"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  {% if ws_groups is defined %}
+  {% for g in ws_groups %}
+  <div class="d-group" data-group="{{ loop.index0 }}">
+    <button class="d-group-toggle" type="button" aria-expanded="false">
+      <span class="d-group-name">{{ g.name }}</span>
+      <svg class="d-chev" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
+    </button>
+    <div class="d-links">
+      {% for l in g.links %}
+      <a href="{{ l.href }}"><span class="nav-ico">{{ icon(l.icon) }}</span><span class="nav-txt">{{ l.label }}</span></a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
 </nav>
 
-{# ---------- mobile-only slim header (hamburger for the drawer) ---------- #}
-<div class="mhead">
-  <button class="hamburger" id="navToggle" aria-label="Open navigation menu" aria-expanded="false"><span class="h-ico">{{ icon('menu') }}</span></button>
-  <span class="mhead-title">{% if ws_current is defined and ws_current %}{{ ws_current.title }}{% else %}{{ company_name }}{% endif %}</span>
-</div>
-<div class="navscrim" id="navScrim" aria-hidden="true"></div>
-
-<div class="desklayout">
-  {# ---------- workspace sidebar ---------- #}
-  <aside class="ws-sidebar" id="ws-sidebar" aria-label="Workspace navigation">
-    <div class="ws-top">
-      <div class="ws-switcher">
-        <button class="ws-switcher-btn" id="wsSwitcherBtn" aria-haspopup="true" aria-expanded="false">
-          <span class="ws-name">{% if ws_current is defined and ws_current %}{{ ws_current.title }}{% else %}Workspace{% endif %}</span>
-          <svg class="ws-chev" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>
-        </button>
-        <div class="ws-menu" id="wsMenu" hidden>
-          {% if workspaces is defined %}
-          {% for ws in workspaces %}
-          <a href="{{ ws.route }}" class="ws-menu-item{% if ws_current is defined and ws_current and ws.key == ws_current.key %} active{% endif %}"><span class="nav-ico">{{ icon(ws.icon) }}</span><span class="nav-txt">{{ ws.title }}</span></a>
-          {% endfor %}
-          {% endif %}
-          <a href="/apps" class="ws-menu-item ws-menu-apps"><span class="nav-ico">{{ icon('home') }}</span><span class="nav-txt">All Apps</span></a>
-        </div>
-      </div>
-    </div>
-    <button class="ws-search" id="awesomeOpen" type="button" aria-label="Search (Ctrl+K)">
-      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <span class="ws-search-txt">Search</span>
-      <kbd>Ctrl K</kbd>
-    </button>
-    <button class="ws-notif" id="notifOpen" type="button" aria-label="Notifications">
-      <span class="nav-ico">{{ icon('bell') }}</span><span class="nav-txt">Notifications</span>{% if unread_count %}<span class="nbadge" id="notifBadge">{{ unread_count }}</span>{% endif %}
-    </button>
-    <nav class="ws-groups">
-      {% if ws_groups is defined %}
-      {% for g in ws_groups %}
-      <div class="ws-group">
-        <div class="ws-gname">{{ g.name }}</div>
-        {% for l in g.links %}
-        <a href="{{ l.href }}"><span class="nav-ico">{{ icon(l.icon) }}</span><span class="nav-txt">{{ l.label }}</span></a>
-        {% endfor %}
-      </div>
+{# ---------- content (PJAX swaps this) ---------- #}
+<main class="content" id="pjax-main" data-pjax>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat, msg in messages %}
+      <div class="flash {{ cat }}">{{ msg }}</div>
       {% endfor %}
-      {% endif %}
-    </nav>
-    <div class="ws-foot">
-      <button class="ws-collapse" id="sidebarCollapse" type="button" aria-label="Collapse sidebar">
-        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>
-        <span class="nav-txt">Collapse sidebar</span>
-      </button>
-    </div>
-  </aside>
+    {% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
 
-  {# ---------- content (PJAX swaps this) ---------- #}
-  <main class="content" id="pjax-main" data-pjax>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for cat, msg in messages %}
-        <div class="flash {{ cat }}">{{ msg }}</div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-    {% block content %}{% endblock %}
-  </main>
-</div>
-
-{# ---------- notifications slide-over ---------- #}
+{# ---------- notifications slide-over (unchanged wiring) ---------- #}
 <div class="panel-scrim" id="notifScrim" hidden></div>
 <aside class="slide-panel" id="notifPanel" aria-label="Notifications" hidden>
   <div class="panel-head">
@@ -139,7 +121,7 @@
   </div>
 </aside>
 
-{# ---------- awesome bar overlay ---------- #}
+{# ---------- awesome bar overlay (unchanged wiring) ---------- #}
 <div class="awesome-scrim" id="awesomeScrim" hidden></div>
 <div class="awesome" id="awesome" role="dialog" aria-modal="true" aria-label="Search or type a command" data-api-url="/api/awesome" hidden>
   <div class="awesome-head">
@@ -163,8 +145,9 @@
   {% endif %}
   <a href="{{ url_for('views.profile') }}"><span class="bnav-ico">{{ icon('user') }}</span><span class="bnav-txt">Profile</span></a>
 </nav>
-<script src="{{ url_for('static', filename='app.js') }}?v=3"></script>
-<script src="{{ url_for('static', filename='desk.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v=4"></script>
+<script src="{{ url_for('static', filename='desk.js') }}?v=2"></script>
+{% block scripts %}{% endblock %}
 {% else %}
 <main class="authpage">
   {% with messages = get_flashed_messages(with_categories=true) %}

@@ -136,14 +136,18 @@ c_admin, c_mgr, c_emp, c_bad = (new_client(), new_client(),
                                 new_client(), new_client())
 
 # ---- 2. Logins: HRADMIN, MGR001, EMP001 ----
-for client, uid, expected in [(c_admin, "HRADMIN", "Welcome, Demo HR Admin"),
-                              (c_mgr, "MGR001", "Welcome, Demo Manager"),
-                              (c_emp, "EMP001", "Welcome, Demo Employee One")]:
+# v3.7: the home greeting is "Good <part of day>, <first name>" (not the
+# old "Welcome, <full name>").
+for client, uid, fname in [(c_admin, "HRADMIN", "Demo"),
+                           (c_mgr, "MGR001", "Demo"),
+                           (c_emp, "EMP001", "Demo")]:
     r = login(client, uid, "Demo@123")
     check(f"login {uid} 302", r.status_code == 302, f"{r.status_code}")
     dash = client.get("/")
-    check(f"dashboard {uid} 200 + welcome",
-          dash.status_code == 200 and expected.encode() in dash.data,
+    check(f"dashboard {uid} 200 + greeting",
+          dash.status_code == 200
+          and re.search(rb"Good (morning|afternoon|evening), "
+                        + fname.encode(), dash.data),
           f"{dash.status_code}")
 check("wrong password rejected",
       login(c_bad, "HRADMIN", "wrong").status_code == 200)

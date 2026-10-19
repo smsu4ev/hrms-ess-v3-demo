@@ -205,7 +205,9 @@ check("viewport meta correct",
       b'content="width=device-width, initial-scale=1, viewport-fit=cover"' in r.data)
 check("bottom nav markup present",
       b'class="bottomnav"' in r.data and b"Home" in r.data and b"Profile" in r.data)
-check("dashboard quick-access tiles present", b'class="tiles"' in r.data)
+# v3.7: the home quick-access grid is now the .tile-grid component
+# (the old .tiles class survives only as a CSS grid alias, not in markup).
+check("dashboard quick-access tiles present", b'class="tile-grid"' in r.data)
 check("drawer JS included", b"app.js" in r.data)
 check("tables wrapped in scroll containers", b"tbl-wrap" in r.data)
 

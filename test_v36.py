@@ -106,14 +106,22 @@ with app.app_context():
        is_hr_staff=True)
     db.session.commit()
 
-# ================= 1) desk shell per role =================
+# ============ 1) app shell per role (v3.7: top bar + drawer) ============
+# The v3.6 rail + workspace sidebar are gone; role-filtered navigation now
+# lives in the top bar (text links) and the slide-in drawer (the current
+# workspace's link groups, from the same workspaces.py registry).
 login("T36-ADM", "pw-T36-ADM")
 r = client.get("/")
 check("admin dashboard 200", r.status_code == 200)
-check("admin rail has HR Setup workspace", b"/ws/hr-setup" in r.data)
-check("admin rail has Payroll workspace", b"/ws/payroll" in r.data)
-check("admin rail has Me workspace", b"/ws/me" in r.data)
-check("admin rail has My Team workspace", b"/ws/my-team" in r.data)
+check("admin drawer renders with groups",
+      b'class="drawer"' in r.data and b'class="d-group"' in r.data)
+check("admin topbar has Home + All Services links",
+      b">Home<" in r.data and b">All Services<" in r.data)
+check("admin topbar has My Team link", b">My Team<" in r.data)
+r = client.get("/ws/hr-setup")
+check("drawer shows current workspace groups",
+      b">Masters<" in r.data and b"Settings &amp; Audit" in r.data)
+check("admin drawer has HR Settings link", b">HR Settings<" in r.data)
 check("admin has Awesome Bar trigger (Ctrl+K)", b"awesome" in r.data.lower())
 check("no doodle wallpaper on desk pages", b"doodle-bg.svg" not in r.data)
 logout()
@@ -121,16 +129,22 @@ logout()
 login("T36-E1", "pw-T36-E1")
 r = client.get("/")
 check("employee dashboard 200", r.status_code == 200)
-check("employee rail has Me workspace", b"/ws/me" in r.data)
-check("employee rail hides Payroll", b"/ws/payroll" not in r.data)
-check("employee rail hides HR Setup", b"/ws/hr-setup" not in r.data)
+check("employee drawer renders", b'class="drawer"' in r.data)
+check("employee drawer hides admin workspaces",
+      b"/ws/payroll" not in r.data and b"/ws/hr-setup" not in r.data)
+check("employee topbar hides My Team link", b">My Team<" not in r.data)
+check("employee drawer hides HR Settings", b"HR Settings" not in r.data)
+r = client.get("/ws/me")
+check("employee drawer shows Me workspace groups",
+      b"/ws/me" in r.data and b"My Profile" in r.data)
 check("employee sees notifications bell", b"notifications" in r.data.lower())
 logout()
 
 login("T36-MGR", "pw-T36-MGR")
 r = client.get("/")
-check("manager rail has My Team", b"/ws/my-team" in r.data)
-check("manager rail hides Payroll", b"/ws/payroll" not in r.data)
+check("manager dashboard 200", r.status_code == 200)
+check("manager topbar has My Team link", b">My Team<" in r.data)
+check("manager drawer hides Payroll workspace", b"/ws/payroll" not in r.data)
 logout()
 
 # ================= 2) /apps grid =================
@@ -330,7 +344,7 @@ _mobile = _css[_media_at:] if _media_at > 0 else ""
 check("bottomnav enabled inside mobile media query",
       ".bottomnav { display: flex" in _mobile)
 r = client.get("/ws/me")
-check("pages link the bumped stylesheet v=7", b"style.css?v=7" in r.data)
+check("pages link the bumped stylesheet v=9", b"style.css?v=9" in r.data)
 
 print()
 print(f"V3.6: {len(passed)} passed, {len(failed)} failed")

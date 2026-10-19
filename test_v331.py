@@ -506,7 +506,10 @@ with app.app_context():
           client.get("/team-overview/absent?dept=Human+Resources").status_code
           == 403)
     r = client.get("/")
-    check("dashboard dept card", b"Department today" in r.data)
+    # v3.7: the old "Department today" card is the manager TODAY hero with
+    # animated count-up team numbers.
+    check("dashboard dept card",
+          b"Present today" in r.data and b"data-count" in r.data)
     logout()
 
     # ================= 8) notification tabs =================

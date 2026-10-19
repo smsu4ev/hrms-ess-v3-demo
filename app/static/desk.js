@@ -1,6 +1,7 @@
-/* HRMS + ESS v3.6 — desk shell behaviour (Frappe model).
+/* HRMS + ESS v3.7 — app shell behaviour (top bar + drawer model).
    Same-origin script, CSP-safe (default-src 'self', no eval). The shell
-   lives OUTSIDE #pjax-main, so these overlays/menus persist across PJAX swaps. */
+   lives OUTSIDE #pjax-main, so these overlays/menus persist across PJAX swaps.
+   app.js calls window.__hrmsShellRefresh() after each PJAX content swap. */
 (function () {
   "use strict";
 
@@ -20,7 +21,7 @@
   function hide(el) { if (el) { el.hidden = true; } }
   function show(el) { if (el) { el.hidden = false; } }
 
-  /* ---------- dropdown helper (avatar menu, workspace switcher) ---------- */
+  /* ---------- dropdown helper (avatar menu) ---------- */
   function dropdown(btnId, menuId) {
     var btn = $(btnId), menu = $(menuId);
     if (!btn || !menu) { return; }
@@ -28,7 +29,7 @@
     btn.addEventListener("click", function (e) {
       e.stopPropagation();
       var open = !menu.hidden;
-      document.querySelectorAll(".avatar-menu, .ws-menu").forEach(hide);
+      document.querySelectorAll(".avatar-menu").forEach(hide);
       if (open) { close(); } else { show(menu); btn.setAttribute("aria-expanded", "true"); }
     });
     menu.addEventListener("click", function (e) { e.stopPropagation(); });
@@ -47,21 +48,112 @@
     });
   }
 
-  /* ---------- sidebar collapse (desktop) ---------- */
-  function initCollapse() {
-    var btn = $("sidebarCollapse");
-    if (!btn) { return; }
-    try {
-      if (window.localStorage.getItem("hrms_sidebar_collapsed") === "1") {
-        document.body.classList.add("sidebar-collapsed");
-      }
-    } catch (e) { /* private mode */ }
-    btn.addEventListener("click", function () {
-      var collapsed = document.body.classList.toggle("sidebar-collapsed");
-      try { window.localStorage.setItem("hrms_sidebar_collapsed", collapsed ? "1" : "0"); }
-      catch (e) { /* ignore */ }
+  /* ---------- navigation drawer (v3.7: replaces rail + workspace sidebar) ---------- */
+  function initDrawer() {
+    var toggle = $("navToggle"), drawer = $("drawer"), scrim = $("drawerScrim"),
+        closeBtn = $("drawerClose");
+    if (!toggle || !drawer) { return; }
+    function openDrawer() {
+      document.body.classList.add("drawer-open");
+      show(scrim);
+      drawer.setAttribute("aria-hidden", "false");
+      toggle.setAttribute("aria-expanded", "true");
+    }
+    function closeDrawer() {
+      document.body.classList.remove("drawer-open");
+      hide(scrim);
+      drawer.setAttribute("aria-hidden", "true");
+      toggle.setAttribute("aria-expanded", "false");
+    }
+    window.__hrmsCloseDrawer = closeDrawer;
+    toggle.addEventListener("click", function () {
+      if (document.body.classList.contains("drawer-open")) { closeDrawer(); }
+      else { openDrawer(); }
     });
+    if (closeBtn) { closeBtn.addEventListener("click", closeDrawer); }
+    if (scrim) { scrim.addEventListener("click", closeDrawer); }
+    // Close on any drawer link click (PJAX navigation follows).
+    var links = drawer.querySelectorAll("a");
+    for (var i = 0; i < links.length; i++) {
+      links[i].addEventListener("click", closeDrawer);
+    }
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && document.body.classList.contains("drawer-open")) { closeDrawer(); }
+    });
+
+    /* Collapsible groups: toggle aria + .open class (CSS animates max-height). */
+    var groups = drawer.querySelectorAll(".d-group");
+    for (var g = 0; g < groups.length; g++) {
+      (function (grp) {
+        var btn = grp.querySelector(".d-group-toggle");
+        if (!btn) { return; }
+        btn.addEventListener("click", function () {
+          var open = grp.classList.toggle("open");
+          btn.setAttribute("aria-expanded", open ? "true" : "false");
+        });
+      })(groups[g]);
+    }
   }
+
+  /* Expand the drawer group containing the current page's link.
+     app.js marks .active on the exact-path link first; we expand around it. */
+  function drawerSync() {
+    var drawer = $("drawer");
+    if (!drawer) { return; }
+    var groups = drawer.querySelectorAll(".d-group");
+    for (var i = 0; i < groups.length; i++) {
+      var grp = groups[i];
+      var hasActive = !!grp.querySelector(".d-links a.active");
+      var btn = grp.querySelector(".d-group-toggle");
+      grp.classList.toggle("open", hasActive);
+      if (btn) { btn.setAttribute("aria-expanded", hasActive ? "true" : "false"); }
+    }
+  }
+
+  /* ---------- count-up for [data-count] (IntersectionObserver, reduced-motion safe) ---------- */
+  function reducedMotion() {
+    return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }
+  function bindCounters(scope) {
+    var root = scope || document;
+    var els = root.querySelectorAll("[data-count]");
+    if (!els.length) { return; }
+    var reduce = reducedMotion();
+    function run(el) {
+      var target = parseFloat(el.getAttribute("data-count")) || 0;
+      if (reduce) { el.textContent = target; return; }
+      var dur = 700, t0 = null;
+      function step(ts) {
+        if (t0 === null) { t0 = ts; }
+        var p = Math.min(1, (ts - t0) / dur);
+        el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3))); // easeOutCubic
+        if (p < 1) { window.requestAnimationFrame(step); }
+      }
+      window.requestAnimationFrame(step);
+    }
+    if (!("IntersectionObserver" in window)) {
+      for (var i = 0; i < els.length; i++) { run(els[i]); }
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      for (var k = 0; k < entries.length; k++) {
+        if (entries[k].isIntersecting) {
+          run(entries[k].target);
+          io.unobserve(entries[k].target);
+        }
+      }
+    }, { threshold: 0.4 });
+    for (var j = 0; j < els.length; j++) {
+      if (!els[j].__countBound) { els[j].__countBound = true; io.observe(els[j]); }
+    }
+  }
+
+  /* Called on boot and after every PJAX swap (by app.js). */
+  function shellRefresh() {
+    drawerSync();
+    bindCounters(document);
+  }
+  window.__hrmsShellRefresh = shellRefresh;
 
   /* ---------- recent pages (client-side, localStorage) ---------- */
   var RECENT_KEY = "hrms_recents_v1";
@@ -274,12 +366,11 @@
 
   ready(function () {
     dropdown("avatarBtn", "avatarMenu");
-    dropdown("wsSwitcherBtn", "wsMenu");
     initTheme();
-    initCollapse();
     trackRecents();
     initAwesome();
     initNotifications();
+    initDrawer();
+    shellRefresh();
   });
 })();
-

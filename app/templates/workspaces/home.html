@@ -2,12 +2,22 @@
 {% from "_icons.html" import icon %}
 {% block title %}{{ ws.title }} - HRMS{% endblock %}
 {% block content %}
-<div class="card">
-  <div style="display:flex;align-items:center;gap:14px">
-    <span style="font-size:30px;line-height:1">{{ icon(ws.icon) }}</span>
-    <div>
-      <h2 style="margin:0">{{ greeting }}</h2>
-      <p class="muted" style="margin:4px 0 0">{{ ws.title }} &mdash; {{ subtitle }}</p>
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="{{ url_for('views.dashboard') }}">Home</a>
+  <span class="crumb-sep">/</span>
+  <span>{{ ws.title }}</span>
+</nav>
+<div class="card hero-card ws-header-card">
+  <div class="hero-row">
+    <div class="hero-main">
+      <span class="t-chip indigo">{{ icon(ws.icon) }}</span>
+      <div>
+        <h2 style="margin:0">{{ greeting }}</h2>
+        <p class="muted" style="margin:4px 0 0">{{ ws.title }} &mdash; {{ subtitle }}</p>
+      </div>
+    </div>
+    <div class="hero-action">
+      <a class="btn small" href="{{ url_for('desk.apps') }}">All Services</a>
     </div>
   </div>
 </div>
