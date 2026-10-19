@@ -5,7 +5,7 @@
   {% if user.photo_path %}
   <img src="{{ url_for('docs.photo', uid=user.id) }}" alt="photo" style="height:64px;width:64px;object-fit:cover;border-radius:50%;vertical-align:middle">
   {% else %}
-  <span style="display:inline-block;height:64px;width:64px;border-radius:50%;background:#5e72e4;color:#fff;text-align:center;line-height:64px;font-weight:bold;vertical-align:middle">{{ user.name[:1] }}</span>
+  <span style="display:inline-block;height:64px;width:64px;border-radius:50%;background:#4f46e5;color:#fff;text-align:center;line-height:64px;font-weight:bold;vertical-align:middle">{{ user.name[:1] }}</span>
   {% endif %}
   {{ user.name }} <span class="muted">({{ user.id }})</span></h2>
 <p><a class="btn small primary" href="{{ url_for('hrms.employee_edit', uid=user.id) }}">Edit</a>

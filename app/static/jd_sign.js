@@ -18,7 +18,7 @@
     ctx.scale(dpr, dpr);
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
-    ctx.strokeStyle = "#172b4d";
+    ctx.strokeStyle = "#0f172a";
     return ctx;
   }
   var ctx = fit();

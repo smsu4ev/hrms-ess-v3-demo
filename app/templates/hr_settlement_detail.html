@@ -23,8 +23,8 @@
        Separation: {{ st.separation_type }} &middot; Status: {{ st.status|upper }}<br>
        Payable by: <strong>{{ st.payment_due_date.isoformat() if st.payment_due_date else '' }}</strong>
        (Art. 53 — within 14 days of contract end)
-       {% if st.is_overdue %}&middot; <strong style="color:#a12222">OVERDUE</strong>{% endif %}
-       {% if st.net < 0 %}&middot; <strong style="color:#a12222">Recovery required</strong>{% endif %}</p>
+       {% if st.is_overdue %}&middot; <strong style="color:#dc2626">OVERDUE</strong>{% endif %}
+       {% if st.net < 0 %}&middot; <strong style="color:#dc2626">Recovery required</strong>{% endif %}</p>
   </div>
   <table class="tbl">
     <tr><th>#</th><th>Particulars</th><th>Payable (AED)</th><th>Recoverable (AED)</th></tr>
