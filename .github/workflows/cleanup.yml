@@ -1,0 +1,23 @@
+name: Clean up one-shot workflow files
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove zip and one-shot workflow files
+        run: |
+          rm -f hrms-ess-v3.zip
+          rm -f .github/workflows/unzip.yml .github/workflows/cleanup.yml
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Clean up one-shot workflow files" || echo "Nothing to commit"
+          git push
