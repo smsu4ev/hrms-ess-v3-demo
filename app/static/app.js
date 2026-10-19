@@ -117,14 +117,14 @@
     }
   }
 
-  /* Active-link highlight across the v3.7 app shell: top-bar links, drawer
+  /* Active-link highlight across the v3.8 app shell: pill-nav items, drawer
      links and bottom-nav links match by exact path; re-run after every
      PJAX swap. desk.js expands the drawer group containing the .active
      link via window.__hrmsShellRefresh(). */
   function markActiveNav(url) {
     try {
       var path = new URL(url, window.location.origin).pathname;
-      var links = document.querySelectorAll("#drawer a, .topbar-links a, .bottomnav a");
+      var links = document.querySelectorAll("#drawer a, .pillnav-item, .bottomnav a");
       for (var i = 0; i < links.length; i++) {
         var a = links[i];
         var lp;

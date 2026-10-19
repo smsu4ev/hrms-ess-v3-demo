@@ -16,7 +16,7 @@ from flask_login import current_user, login_required
 
 from app import limiter
 from app.files import salary_visible
-from app.models import EmployeeDocument, Notification, User
+from app.models import EmployeeDocument, LeaveRequest, Notification, User
 
 desk_bp = Blueprint("desk", __name__)
 
@@ -247,9 +247,13 @@ def inject_desk_globals():
 
     ``workspaces`` / ``ws_groups`` / ``ws_current`` are wired by the app
     context processor elsewhere; this only adds desk-shell extras.
+    v3.8: also injects ``approvals_pending`` (pending leave requests for
+    manager+ users) for the pill-nav Approvals badge; the dashboard view
+    passes its own value which takes precedence there.
     """
     if not getattr(current_user, "is_authenticated", False):
-        return {"notif_panel": [], "desk_settings_url": None}
+        return {"notif_panel": [], "desk_settings_url": None,
+                "approvals_pending": 0}
     try:
         items = (Notification.query
                  .filter_by(user_id=current_user.id)
@@ -263,4 +267,12 @@ def inject_desk_globals():
             settings_url = url_for("settings.page")
     except Exception:
         settings_url = None
-    return {"notif_panel": items, "desk_settings_url": settings_url}
+    approvals_pending = 0
+    try:
+        if current_user.is_manager:
+            approvals_pending = LeaveRequest.query.filter_by(
+                status="pending").count()
+    except Exception:
+        approvals_pending = 0
+    return {"notif_panel": items, "desk_settings_url": settings_url,
+            "approvals_pending": approvals_pending}

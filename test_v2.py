@@ -117,8 +117,11 @@ r = client.get("/admin/audit?entity=employee")
 check("audit filter page ok", r.status_code == 200 and b"Senior Engineer" in r.data)
 
 # 5. Expiry widget: visa expiring in 10 days appears on admin dashboard
+# v3.8: the expiry widget is now the "Expiring visas" accordion plus the
+# "Visa expiries · 20 days" row on the dark tasks card.
 r = client.get("/")
-check("expiry widget shows TST-EXP", b"TST-EXP" in r.data and b"Expiries (next 30 days)" in r.data)
+check("expiry widget shows TST-EXP",
+      b"Test Expiry" in r.data and b"Expiring visas" in r.data)
 
 # 6. Employee 360 detail page
 r = client.get("/hrms/employees/TST-NEW")

@@ -1,173 +1,170 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
 {% block title %}Home{% endblock %}
-{% macro tile(i, href, ic, tint, label, sub, badge=None, no_pjax=False) -%}
-<a class="tile" style="--i:{{ i }}" href="{{ href }}"{% if no_pjax %} data-no-pjax="1"{% endif %}>
-  <span class="t-chip {{ tint }}">{{ icon(ic) }}</span>
-  <span class="t-lbl">{{ label }}</span>
-  <div class="t-sub">{{ sub }}</div>
-  {% if badge %}<span class="t-badge">{{ badge }}</span>{% endif %}
-</a>
-{%- endmacro %}
 {% block content %}
+{# v3.8 home: class contract per V38-THEME-SPEC.md (stream A provides .panel/.pillnav + theme CSS).
+   Mobile order hooks: mord-tracker/mord-tasks/mord-profile/mord-progress/mord-cal
+   (stream A: flatten columns with display:contents and order these on mobile). #}
+<div class="dash">
 
-{# (a) greeting header #}
-<div class="home-greet">
-  <div>
-    <h2 style="margin:0">Good {{ greet_part }}, {{ greet_name }}</h2>
-    <p class="muted" style="margin:4px 0 0">{{ today_gst.strftime('%A, %d %B %Y') }}{% if current_user.department %} &middot; {{ current_user.department }}{% endif %}{% if current_user.designation %} &middot; {{ current_user.designation }}{% endif %}</p>
-  </div>
-</div>
-
-{# (b) TODAY hero card #}
-<div class="card hero-card">
-  <div class="hero-row">
-    <div class="hero-main">
-      <div class="hero-kicker">Today</div>
-      {% if today_assignment and today_assignment.shift %}
-      <div class="hero-shift">{{ icon('clock') }} <strong>{{ today_assignment.shift.name }}</strong> &middot; {{ today_assignment.shift.start_time }} &ndash; {{ today_assignment.shift.end_time }}</div>
-      {% else %}
-      <div class="hero-shift muted">{{ icon('clock') }} No shift assigned today</div>
-      {% endif %}
-      {% if punched_in %}
-      <div class="hero-status ok">Checked in at {{ punch_in_at }}</div>
-      {% elif punch_out_at %}
-      <div class="hero-status">Checked out at {{ punch_out_at }}{% if punch_in_at %} &middot; in at {{ punch_in_at }}{% endif %}</div>
-      {% else %}
-      <div class="hero-status muted">Not punched in yet</div>
-      {% endif %}
-    </div>
-    <div class="hero-action">
-      {% if punch_disabled %}
-      <span class="btn punch-btn disabled" title="Mobile check-in is disabled by HR policy">Check In</span>
-      <div class="muted small">Check-in disabled by HR policy</div>
-      {% else %}
-      <a class="btn punch-btn{% if not punched_in %} pulse-ring{% endif %}" data-no-pjax="1" href="{{ url_for('engagement.punch_page') }}">{{ 'Check Out' if punched_in else 'Check In' }}</a>
-      {% endif %}
-    </div>
-  </div>
-  {% if is_hr %}
-  <div class="hero-stats">
-    <div class="hstat"><div class="num" data-count="{{ approvals_pending }}">{{ approvals_pending }}</div><div class="lbl">Pending approvals</div></div>
-    <div class="hstat"><div class="num" data-count="{{ visa_expiries_20 }}">{{ visa_expiries_20 }}</div><div class="lbl">Visa expiries (20d)</div></div>
-    <div class="hstat"><div class="num" data-count="{{ open_tickets }}">{{ open_tickets }}</div><div class="lbl">Open tickets</div></div>
-  </div>
-  {% elif current_user.is_manager and dept_card %}
-  <div class="hero-stats">
-    <div class="hstat"><div class="num" data-count="{{ team_present }}">{{ team_present }}</div><div class="lbl">Present today</div></div>
-    <div class="hstat"><div class="num" data-count="{{ team_absent }}">{{ team_absent }}</div><div class="lbl">Absent</div></div>
-    <div class="hstat"><div class="num" data-count="{{ team_on_leave }}">{{ team_on_leave }}</div><div class="lbl">On leave</div></div>
-  </div>
-  {% endif %}
-</div>
-
-{# (c) QUICK TILES #}
-<h3>Quick access</h3>
-<div class="tile-grid">
-  {{ tile(0, url_for('engagement.punch_page'), 'stopwatch', 'sky', 'Check In/Out', 'GPS + selfie', no_pjax=True) }}
-  {{ tile(1, url_for('views.leave'), 'calendar', 'indigo', 'Apply Leave', 'Annual, sick, maternity & more (UAE)', badge=pending_leaves or None) }}
-  {{ tile(2, url_for('views.leave'), 'calendar', 'violet', 'My Leave', 'Balances & requests') }}
-  {{ tile(3, url_for('views.payslips'), 'card', 'emerald', 'My Payslips', 'Last 6 months') }}
-  {{ tile(4, url_for('docs.my_documents'), 'file', 'amber', 'My Documents', 'ID, visa, certificates') }}
-  {{ tile(5, url_for('extras.my_letters'), 'mail', 'sky', 'Request Letter', 'Ask HR for a letter') }}
-  {{ tile(6, url_for('extras.my_expenses'), 'money', 'emerald', 'My Expenses', 'Claims & reimbursements') }}
-  {{ tile(7, url_for('helpdesk.my_tickets'), 'chat', 'violet', 'My Tickets', 'Support tickets') }}
-  {{ tile(8, url_for('engagement.notices'), 'bell', 'amber', 'Notices', 'Company notices', badge=mandatory_count or None) }}
-  {{ tile(9, url_for('extras.directory'), 'users', 'indigo', 'Directory', 'People & org chart') }}
-  {% if current_user.is_manager %}
-  {{ tile(10, url_for('views.approvals'), 'check', 'rose', 'Approvals', 'Leave & regularisation', badge=approvals_pending or None) }}
-  {{ tile(11, url_for('extras.team_overview'), 'home', 'indigo', 'Team Overview', 'Team today') }}
-  {{ tile(12, url_for('extras.team_calendar'), 'calendar', 'sky', 'Team Calendar', 'Who is on leave') }}
-  {{ tile(13, url_for('roster.roster'), 'clock', 'amber', 'Roster', 'Shift roster') }}
-  {% endif %}
-  {% if is_hr %}
-  {% if can_salary %}
-  {{ tile(14, url_for('hrms.employees'), 'users', 'indigo', 'Employees', 'HR records & master data') }}
-  {% endif %}
-  {% if can_create_emp %}
-  {{ tile(15, url_for('hrms.employee_new'), 'usercheck', 'emerald', 'Add Employee', 'Onboard a new joiner') }}
-  {% endif %}
-  {% if can_salary %}
-  {{ tile(16, url_for('payroll.runs'), 'money', 'emerald', 'Payroll', 'Runs, WPS & loans') }}
-  {% endif %}
-  {% if current_user.is_admin %}
-  {{ tile(17, url_for('reports.hub'), 'chart', 'violet', 'Reports', 'HR analytics') }}
-  {{ tile(18, url_for('settings.page'), 'building', 'amber', 'HR Settings', 'Toggles & policies') }}
-  {{ tile(19, url_for('approvals.matrix_admin'), 'clipboard', 'rose', 'Approval Matrix', 'Approval chains') }}
-  {% endif %}
-  {% endif %}
-</div>
-
-{# (d) MY TASKS card #}
-<div class="cards">
-  <div class="card">
-    <h3 style="margin-top:0">My tasks{% if inbox_total %} <span class="t-badge">{{ inbox_total }}</span>{% endif %}</h3>
-    {% if inbox_items %}
-    <ul class="task-list">
-      {% for t in inbox_items %}
-      <li><a href="{{ t.link }}">{{ t.text }}</a></li>
-      {% endfor %}
-    </ul>
-    {% else %}
-    <p class="muted">Nothing waiting on you &mdash; all caught up.</p>
-    {% endif %}
-    <a class="btn small" href="{{ url_for('extras.inbox') }}">Open inbox</a>
+  <div class="dash-greet-wrap">
+    <h1 class="dash-greet">Welcome in, {{ greet_name }}</h1>
+    <p class="dash-sub">{{ today_label }}{% if dept_line %} &middot; {{ dept_line }}{% endif %}</p>
   </div>
 
-  {# (e) CELEBRATIONS strip + latest NOTICE card #}
-  {% if todays_posts %}
-  <div class="card">
-    <h3 style="margin-top:0">Celebrations</h3>
-    <div class="celeb-strip">
-      {% for p in todays_posts %}
-      {% set u = post_users.get(p.user_id) %}
-      <div class="celeb-chip">{{ icon('star') }} <strong>{{ u.name if u else p.user_id }}</strong>
-        <span class="muted">{{ 'Birthday' if p.kind == 'birthday' else p.years ~ ' year anniversary' }}</span></div>
+  <section class="kpi-strip" aria-label="Key indicators">
+    <div class="kpi-bars">
+      {% for b in kpi_bars %}
+      <div class="kbar">
+        <div class="kbar-label">{{ b.label }}</div>
+        <div class="kbar-track"><div class="kbar-fill" style="width:{{ b.width }}%"></div></div>
+        <span class="kbar-pct">{{ b.display }}</span>
+      </div>
       {% endfor %}
     </div>
-    <a class="btn small" href="{{ url_for('engagement.celebrations') }}">Send wishes</a>
-  </div>
-  {% endif %}
-  {% if notices %}
-  <div class="card">
-    <h3 style="margin-top:0">Latest notice</h3>
-    <p><a href="{{ url_for('engagement.notice_view', nid=notices[0].id) }}">{{ notices[0].title }}</a>
-      {% if notices[0].requires_ack %}<span class="badge pending">Mandatory read</span>{% endif %}</p>
-    <p class="muted small">{{ notices[0].created_at.strftime('%d %b %Y') }}</p>
-    <a class="btn small" href="{{ url_for('engagement.notices') }}">All notices</a>
-  </div>
-  {% endif %}
-</div>
+    <div class="kpi-nums">
+      {% for n in kpi_nums %}
+      <div class="knum">
+        <span class="knum-ico">{{ icon(n.icon) }}</span>
+        <div class="knum-num"{% if n.count %} data-count="{{ n.num }}"{% endif %}>{{ n.display }}</div>
+        <div class="knum-cap">{{ n.cap }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
 
-{# Leave balances (kept from the v2 home, compact). #}
-{% if balances %}
-<div class="card">
-  <h3 style="margin-top:0">Leave balances</h3>
-  <div class="tbl-wrap"><table class="tbl">
-    <tr><th>Leave Type</th><th>Entitled</th><th>Used</th><th>Remaining</th></tr>
-    {% for b in balances %}{% if b.leave_type != 'sick' %}
-    <tr><td>{{ b.leave_type|title }}</td><td>{{ b.entitled }}</td><td>{{ b.used }}</td><td>{{ b.entitled - b.used }}</td></tr>
-    {% endif %}{% endfor %}
-  </table></div>
-  <a class="btn small" href="{{ url_for('views.leave') }}">Apply leave</a>
-</div>
-{% endif %}
+  <div class="dash-grid">
 
-{# Admin: compact 30-day document-expiry watchlist (kept from the v2 home). #}
-{% if current_user.is_admin and expiring_docs %}
-<div class="card">
-  <h3 style="margin-top:0">Visa / Passport / Emirates ID Expiries (next 30 days)</h3>
-  <div class="tbl-wrap"><table class="tbl">
-    <tr><th>Employee</th><th>Document</th><th>Expiry Date</th><th>Days Left</th></tr>
-    {% for e in expiring_docs[:8] %}
-    <tr>
-      <td><a href="{{ url_for('hrms.employee_detail', uid=e.user.id) }}">{{ e.user.name }} ({{ e.user.id }})</a></td>
-      <td>{{ e.doc|title }}</td><td>{{ e.date }}</td>
-      <td><span class="badge {% if e.days_left < 0 %}rejected{% elif e.days_left <= 10 %}pending{% else %}late{% endif %}">{{ e.days_left }} days</span></td>
-    </tr>
-    {% endfor %}
-  </table></div>
-  {% if expiring_docs|length > 8 %}<p class="muted small">+ {{ expiring_docs|length - 8 }} more</p>{% endif %}
+    <div class="dcol-l">
+      <div class="card profile-card mord-profile" style="--i:0">
+        <div class="profile-top">
+          {% if profile.photo_url %}
+          <img class="profile-photo" src="{{ profile.photo_url }}" alt="{{ profile.name }}">
+          {% else %}
+          <div class="profile-photo profile-initials" aria-hidden="true">{{ profile.initials }}</div>
+          {% endif %}
+          <div class="profile-id">
+            <div class="profile-name">{{ profile.name }}</div>
+            <div class="profile-sub">{{ profile.sub }}</div>
+          </div>
+        </div>
+        {% if profile.salary_chip %}
+        <span class="pay-chip">{{ profile.salary_chip }}</span>
+        {% else %}
+        <span class="status-chip">{{ profile.status_chip }}</span>
+        {% endif %}
+      </div>
+
+      {# Mobile order hook: accordions belong to the profile column group. #}
+      <div class="acc mord-profile">
+        {% for a in accordions %}
+        <details class="acc-item"{% if loop.first %} open{% endif %}>
+          <summary class="acc-head">
+            <span class="acc-ico">{{ icon(a.icon) }}</span>
+            <span class="acc-title">{{ a.title }}</span>
+            <span class="acc-chev" aria-hidden="true">&rsaquo;</span>
+          </summary>
+          <div class="acc-body">
+            {% for r in a.rows %}
+            <div class="acc-row{% if r.warn %} warn{% endif %}">
+              {% if r.initials %}<span class="acc-init" aria-hidden="true">{{ r.initials }}</span>{% endif %}
+              <span class="acc-t">{{ r.t }}<span class="acc-s">{{ r.s }}</span></span>
+              {% if r.link %}<a class="acc-link" href="{{ r.link }}">{{ r.link_label or 'View' }}</a>{% endif %}
+            </div>
+            {% else %}
+            <div class="acc-row acc-empty">{{ a.empty }}</div>
+            {% endfor %}
+            {% if a.view_all %}<a class="acc-foot" href="{{ a.view_all.url }}">{{ a.view_all.label }} &rarr;</a>{% endif %}
+          </div>
+        </details>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="dcol-m">
+      <div class="card week-card mord-progress" style="--i:1">
+        <div class="card-h">
+          <div class="card-t">This week</div>
+          <div class="card-more">{{ week.total }}</div>
+        </div>
+        <div class="weekbars">
+          {% for d in week.bars %}
+          <div class="wbar{% if d.is_today %} today{% endif %}">
+            {% if d.label %}<span class="wbar-val">{{ d.label }}</span>{% endif %}
+            <div class="wbar-bar" style="height:{{ d.h }}%"></div>
+            <span class="wbar-d">{{ d.dow }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="card cal-card mord-cal" style="--i:2">
+        <div class="card-h">
+          <div class="card-t">Team leave</div>
+          <div class="card-more"><a href="{{ calendar.url }}">Full calendar</a></div>
+        </div>
+        <div class="cal">
+          <div class="cal-months">
+            {% for m in calendar.months %}<span class="cal-month{% if loop.index0 == 1 %} now{% endif %}">{{ m }}</span>{% endfor %}
+          </div>
+          <div class="cal-week">
+            {% for d in calendar.days %}
+            <div class="cal-day{% if d.is_today %} today{% endif %}">
+              <div class="cal-dow">{{ d.dow }}</div>
+              <div class="cal-date">{{ d.date }}</div>
+              {% for c in d.chips %}
+              <div class="cal-chip"><span class="chip-init" aria-hidden="true">{{ c.initials }}</span><span class="chip-name">{{ c.name }}</span></div>
+              {% endfor %}
+            </div>
+            {% endfor %}
+          </div>
+          {% if not calendar.has %}<div class="cal-empty">No leave scheduled this week</div>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="dcol-r">
+      <div class="card tracker-card mord-tracker" style="--i:3">
+        <div class="card-h">
+          <div class="card-t">Today</div>
+          <div class="card-more">{{ tracker.date_label }}</div>
+        </div>
+        <div class="tracker">
+          <svg class="ring" viewBox="0 0 120 120" role="img" aria-label="{{ tracker.pct }}% {{ tracker.cap }}">
+            <circle class="ring-bg" cx="60" cy="60" r="54"></circle>
+            <circle class="fg" cx="60" cy="60" r="54" stroke-dasharray="{{ tracker.ring_c }}" style="stroke-dashoffset:{{ tracker.ring_offset }}"></circle>
+          </svg>
+          <div class="ring-center">
+            <div class="ring-time">{{ tracker.center }}</div>
+            <div class="ring-cap">{{ tracker.cap }}</div>
+          </div>
+        </div>
+        <div class="tracker-sub">{{ tracker.sub }}</div>
+        {% if punch.disabled %}
+        <span class="punch-btn disabled" title="Mobile check-in is disabled by HR policy">{{ punch.label }}</span>
+        {% else %}
+        <a class="punch-btn{% if punch.pulse %} pulse{% endif %}" data-no-pjax="1" href="{{ punch.url }}">{{ punch.label }}</a>
+        {% endif %}
+      </div>
+
+      <div class="card tasks-dark mord-tasks" style="--i:4">
+        <div class="tasks-head">
+          <div class="card-t">My tasks</div>
+          <div class="tasks-pct">{{ tasks_card.pct_display }}</div>
+        </div>
+        <div class="tasks-sub">{% if tasks_card.done + tasks_card.open %}{{ tasks_card.done }} of {{ tasks_card.done + tasks_card.open }} done{% else %}Nothing on your plate{% endif %}</div>
+        {% for r in tasks_card.rows %}
+        <a class="task-row" href="{{ r.link }}">
+          <span class="task-ico">{{ icon(r.icon) }}</span>
+          <span class="task-t">{{ r.title }}<span class="task-s">{{ r.sub }}</span></span>
+          <span class="task-state">
+            {% if r.open_n %}<span class="task-count">{{ r.open_n }}</span>{% else %}<span class="task-check">{{ icon('check') }}</span>{% endif %}
+          </span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
 </div>
-{% endif %}
 {% endblock %}

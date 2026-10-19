@@ -43,122 +43,569 @@ def approver_required(fn):
     return wrapper
 
 
-# ---------------- Dashboard ----------------
+# ---------------- Dashboard (v3.8 rebuild) ----------------
 @views_bp.route("/")
 @login_required
 def dashboard():
-    balances = LeaveBalance.query.filter_by(user_id=current_user.id).all()
-    pending_leaves = LeaveRequest.query.filter_by(
-        user_id=current_user.id, status="pending").count()
-    open_grievances = Grievance.query.filter(
-        Grievance.user_id == current_user.id,
-        Grievance.status.in_(["submitted", "under_review", "in_progress"])).count()
-    month_start = date.today().replace(day=1)
-    att = AttendanceRecord.query.filter(
-        AttendanceRecord.user_id == current_user.id,
-        AttendanceRecord.date >= month_start).all()
-    present = sum(1 for r in att if r.status in ("present", "late"))
-    approvals_pending = 0
-    if current_user.is_manager:
-        approvals_pending = LeaveRequest.query.filter_by(status="pending").count()
-    expiring_docs = []
-    if current_user.is_admin:
-        from app.hrms import get_upcoming_expiries
-        expiring_docs = get_upcoming_expiries(30)
-    # v3.3: engagement — today's celebrations, latest notices, mandatory reads.
-    from app.engagement import (ensure_todays_celebrations, visible_notices,
-                                pending_mandatory_notices, gst_now)
-    ensure_todays_celebrations()
-    notices = visible_notices(current_user, limit=3)
-    mandatory = pending_mandatory_notices(current_user)
-    # v3.3.1: unified inbox summary for the My Tasks card.
-    from app.ess_extras import inbox_summary, dept_today
-    _inbox = inbox_summary(current_user)
-    inbox_total, inbox_items = _inbox["total"], _inbox["items"]
-    dept_card = dept_today(current_user)
-    from app.models import CelebrationPost
-    from datetime import date as _date
-    today = _date.today()
-    todays_posts = CelebrationPost.query.filter_by(
-        post_date=today).order_by(CelebrationPost.id).all()
-    users = {u.id: u for u in User.query.filter(
-        User.id.in_([p.user_id for p in todays_posts])).all()} \
-        if todays_posts else {}
-    # ---- v3.7 App-UI home context -------------------------------------
-    # Greeting (GST clock, like the rest of the app).
-    now_gst = gst_now()
-    hour = now_gst.hour
-    greet_part = "morning" if hour < 12 else "afternoon" if hour < 17 \
-        else "evening"
-    greet_name = (current_user.name or current_user.id).split()[0]
-    today_gst = now_gst.date()
-    # Employee TODAY hero: roster assignment + punch status.
-    from app.models import RosterAssignment, PunchRecord
+    """v3.8 home: role-based KPI strip, profile, week progress, today
+    tracker ring, dark tasks card, accordions and a team-leave calendar.
+    Every widget is fed by real queries — empty data renders "—" or an
+    honest empty state, never decorative numbers."""
+    from app.engagement import gst_now
+    from app.ess_extras import inbox_tasks, dept_today, _overview_scope
+    from app.hrms import get_upcoming_expiries
     from app.settingsutil import get_setting
+    from app.models import (
+        RosterAssignment, PunchRecord, EmployeeDocument, Certification,
+        JDAcknowledgement, JobDescription, TrainingAssignment, TrainingAttempt,
+        Notice, ApprovalAction, SalaryAssignment, LeaveBalance as _LB,
+        RegularisationRequest as _RR, LetterRequest as _LR)
     from app.models_v35 import HelpdeskTicket
-    assignment = RosterAssignment.query.filter_by(
-        user_id=current_user.id, date=today_gst).first()
-    punches_today = PunchRecord.query.filter_by(
-        user_id=current_user.id, local_date=today_gst)\
-        .order_by(PunchRecord.punched_at).all()
-    # punched_at is UTC; shift +4 for GST display like the rest of the app.
-    def _gst_hhmm(dt):
-        return (dt + timedelta(hours=4)).strftime("%H:%M") if dt else None
-    last_punch = punches_today[-1] if punches_today else None
-    last_in = next((p for p in reversed(punches_today)
-                    if p.punch_type == "in"), None)
-    last_out = next((p for p in reversed(punches_today)
-                     if p.punch_type == "out"), None)
-    punched_in = last_punch is not None and last_punch.punch_type == "in"
-    punch_in_at = _gst_hhmm(last_in.punched_at) if last_in else None
-    punch_out_at = _gst_hhmm(last_out.punched_at) if last_out else None
-    punch_disabled = get_setting("mobile_checkin", "1") != "1"
-    # Role flags for the tile grid / hero variants.
-    is_hr = bool(current_user.is_admin or current_user.is_hr_staff
-                 or current_user.is_hr_manager)
-    from app.files import salary_visible
-    can_salary = bool(salary_visible(current_user))
-    can_create_emp = is_hr
-    # Manager hero counts (present derived from the dept-day scope).
-    team_present = team_absent = team_on_leave = 0
-    if dept_card:
-        team_absent = dept_card["absent"]
-        team_on_leave = dept_card["vacation"]
-        team_present = max(dept_card["staff"] - team_absent
-                           - team_on_leave, 0)
-    # Admin/HR hero counts.
-    from app.hrms import get_upcoming_expiries as _expiries
-    visa_expiries_20 = (len(_expiries(20)) if is_hr else 0)
-    open_tickets = (HelpdeskTicket.query.filter(
-        HelpdeskTicket.status.in_(["open", "in_progress"])).count()
-        if is_hr else 0)
-    return render_template("dashboard.html", balances=balances,
-                           pending_leaves=pending_leaves,
-                           open_grievances=open_grievances,
-                           present_days=present,
-                           approvals_pending=approvals_pending,
-                           expiring_docs=expiring_docs,
-                           notices=notices, mandatory=mandatory,
-                           mandatory_count=len(mandatory),
-                           inbox_total=inbox_total, inbox_items=inbox_items,
-                           dept_card=dept_card,
-                           todays_posts=todays_posts, post_users=users,
-                           # v3.7 home
-                           greet_part=greet_part, greet_name=greet_name,
-                           today_gst=today_gst,
-                           today_assignment=assignment,
-                           punched_in=punched_in,
-                           punch_in_at=punch_in_at,
-                           punch_out_at=punch_out_at,
-                           punch_disabled=punch_disabled,
-                           team_present=team_present,
-                           team_absent=team_absent,
-                           team_on_leave=team_on_leave,
-                           visa_expiries_20=visa_expiries_20,
-                           open_tickets=open_tickets,
-                           is_hr=is_hr, can_salary=can_salary,
-                           can_create_emp=can_create_emp)
 
+    u = current_user
+    now_gst = gst_now()
+    today = now_gst.date()
+    month_start = today.replace(day=1)
+    window_90 = today - timedelta(days=90)
+    window_30dt = datetime.utcnow() - timedelta(days=30)
+    month_tag = month_start.strftime("%b")
+
+    is_hr = bool(u.is_admin or u.is_hr_staff or u.is_hr_manager)
+    role = "admin" if is_hr else ("manager" if u.is_manager else "employee")
+    greet_name = (u.name or u.id).split()[0]
+    today_label = today.strftime("%A, %d %B %Y")
+
+    # ---- scope: employee=self, manager=own+reports' departments, admin=all
+    manager_depts = set()
+    if is_hr:
+        scope_ids = [x.id for x in User.query.filter_by(is_active=True).all()]
+    elif u.is_manager:
+        manager_depts = _overview_scope(u) or set()
+        scope_ids = [x.id for x in User.query.filter(
+            User.is_active.is_(True),
+            User.department.in_(sorted(manager_depts))).all()
+        ] if manager_depts else []
+    else:
+        scope_ids = [u.id]
+    if not scope_ids:
+        scope_ids = ["__none__"]  # keep .in_() valid; matches nothing
+
+    # ---- KPI bar 1: attendance % (month, scope)
+    att_month = AttendanceRecord.query.filter(
+        AttendanceRecord.user_id.in_(scope_ids),
+        AttendanceRecord.date >= month_start,
+        AttendanceRecord.date <= today).all()
+    work_days = [r for r in att_month
+                 if r.status in ("present", "late", "absent")]
+    worked_days = [r for r in work_days if r.status in ("present", "late")]
+    att_pct = (round(len(worked_days) / len(work_days) * 100, 1)
+               if work_days else None)
+
+    # ---- KPI bar 2/3 (manager/admin): on-time % from punch records.
+    # Late = an "in" punch past (shift start + grace) on a rostered day —
+    # the same rule the punch endpoint uses to mark AttendanceRecord late.
+    punches = PunchRecord.query.filter(
+        PunchRecord.user_id.in_(scope_ids),
+        PunchRecord.punch_type == "in",
+        PunchRecord.local_date >= month_start,
+        PunchRecord.local_date <= today).all()
+    ras = RosterAssignment.query.filter(
+        RosterAssignment.user_id.in_(scope_ids),
+        RosterAssignment.date >= month_start,
+        RosterAssignment.date <= today).all()
+    shift_by = {(ra.user_id, ra.date): ra.shift for ra in ras
+                if ra.shift and ra.shift.start_time}
+    judged = late_n = 0
+    for p in punches:
+        sh = shift_by.get((p.user_id, p.local_date))
+        if sh is None:
+            continue
+        try:
+            shh, shm = map(int, sh.start_time.split(":"))
+        except (ValueError, AttributeError):
+            continue
+        local = p.punched_at + timedelta(hours=4)  # punched_at is UTC
+        judged += 1
+        if (local.hour * 60 + local.minute
+                > shh * 60 + shm + (sh.grace_minutes or 0)):
+            late_n += 1
+    ontime_pct = (round((judged - late_n) / judged * 100, 1)
+                  if judged else None)
+
+    # ---- KPI bar: leave decided % (requests created in the last 90 days)
+    lrs = LeaveRequest.query.filter(
+        LeaveRequest.user_id.in_(scope_ids),
+        LeaveRequest.created_at >= datetime.combine(window_90,
+                                                    datetime.min.time()),
+        LeaveRequest.status.in_(("pending", "approved", "rejected"))).all()
+    decided_n = sum(1 for r in lrs if r.status in ("approved", "rejected"))
+    leave_decided_pct = (round(decided_n / len(lrs) * 100, 1) if lrs else None)
+
+    # ---- KPI bar (admin): tickets closed %
+    tickets_pct = None
+    if role == "admin":
+        all_tickets = HelpdeskTicket.query.all()
+        closed_n = sum(1 for t in all_tickets
+                       if t.status in ("resolved", "closed"))
+        tickets_pct = (round(closed_n / len(all_tickets) * 100, 1)
+                       if all_tickets else None)
+
+    # ---- employee-only bars: annual leave used %, training completed %
+    annual_bal = _LB.query.filter_by(user_id=u.id,
+                                     leave_type="annual").first()
+    annual_used_pct = (round(annual_bal.used / annual_bal.entitled * 100, 1)
+                       if annual_bal and annual_bal.entitled else None)
+    assigns = TrainingAssignment.query.filter_by(user_id=u.id).all()
+    passed_courses = {a.course_id for a in TrainingAttempt.query.filter_by(
+        user_id=u.id, passed=True).all()}
+    passed_assigns = [a for a in assigns if a.course_id in passed_courses]
+    training_pct = (round(len(passed_assigns) / len(assigns) * 100, 1)
+                    if assigns else None)
+
+    def _bar(label, pct):
+        return {"label": label, "pct": pct,
+                "display": f"{pct:g}%" if pct is not None else "—",
+                "width": pct if pct is not None else 0}
+
+    if role == "employee":
+        kpi_bars = [_bar(f"My attendance · {month_tag}", att_pct),
+                    _bar("Annual leave used", annual_used_pct),
+                    _bar("Training completed", training_pct)]
+    elif role == "manager":
+        kpi_bars = [_bar(f"Team attendance · {month_tag}", att_pct),
+                    _bar("On-time punches", ontime_pct),
+                    _bar("Leave decided · 90d", leave_decided_pct)]
+    else:
+        kpi_bars = [_bar(f"Attendance · {month_tag}", att_pct),
+                    _bar("On-time punches", ontime_pct),
+                    _bar("Leave decided · 90d", leave_decided_pct),
+                    _bar("Tickets closed", tickets_pct)]
+
+    # ---- unified inbox (drives tasks card + approvals big number)
+    tasks = inbox_tasks(u)
+    n_appr = len(tasks["approvals"])
+    n_not = len(tasks["notices"])
+    n_jd = len(tasks["jds"])
+    n_tr = len(tasks["training"])
+    n_mine = len(tasks["mine"])
+
+    # ---- big numbers
+    present_today_n = db.session.query(
+        func.count(func.distinct(AttendanceRecord.user_id))).filter(
+        AttendanceRecord.user_id.in_(scope_ids),
+        AttendanceRecord.date == today,
+        AttendanceRecord.status.in_(("present", "late"))).scalar() or 0
+
+    def _num(num, cap, icon, count=True, display=None):
+        return {"num": num, "cap": cap, "icon": icon, "count": count,
+                "display": str(num) if display is None else display}
+
+    if role == "employee":
+        annual_balance = ((annual_bal.entitled or 0) - (annual_bal.used or 0)
+                          if annual_bal else None)
+        kpi_nums = [
+            _num(len(worked_days), f"Days present · {month_tag}", "check"),
+            _num(annual_balance if annual_balance is not None else "—",
+                 "Annual leave balance (days)", "calendar",
+                 count=isinstance(annual_balance, int),
+                 display=(f"{annual_balance:g}"
+                          if annual_balance is not None else "—")),
+            _num(n_mine, "Open requests", "clipboard"),
+        ]
+    elif role == "manager":
+        dcard = dept_today(u)
+        team_present = (max(dcard["staff"] - dcard["absent"]
+                            - dcard["vacation"], 0) if dcard else 0)
+        team_on_leave = dcard["vacation"] if dcard else 0
+        kpi_nums = [
+            _num(team_present, "Team present today", "users"),
+            _num(team_on_leave, "On leave today", "calendar"),
+            _num(n_appr, "Approvals waiting", "check"),
+        ]
+    else:
+        active_n = User.query.filter_by(is_active=True).count()
+        kpi_nums = [
+            _num(active_n, "Active employees", "users"),
+            _num(present_today_n, "Present today", "check"),
+            _num(n_appr, "Pending approvals", "clipboard"),
+        ]
+
+    # ---- profile card (self only; salary chip only with an assignment)
+    initials = "".join(w[0] for w in (u.name or u.id).split()[:2]).upper()
+    has_salary = SalaryAssignment.query.filter(
+        SalaryAssignment.user_id == u.id,
+        SalaryAssignment.effective_from <= today).first() is not None
+    profile = {
+        "photo_url": url_for("docs.photo", uid=u.id) if u.photo_path else None,
+        "initials": initials,
+        "name": u.name,
+        "sub": " · ".join(x for x in
+                           [u.designation, u.department] if x) or "—",
+        "salary_chip": ("AED {:,.2f} / month".format(u.monthly_salary or 0.0)
+                        if has_salary else None),
+        "status_chip": (u.employment_status or "active").replace("_", " "
+                                                                       ).title(),
+    }
+
+    # ---- "This week" card: 7 Mon–Sun bars from AttendanceRecord
+    mon = today - timedelta(days=today.weekday())
+    sun = mon + timedelta(days=6)
+    week_dates = [mon + timedelta(days=i) for i in range(7)]
+    if role == "employee":
+        recs = {r.date: r for r in AttendanceRecord.query.filter(
+            AttendanceRecord.user_id == u.id,
+            AttendanceRecord.date >= mon,
+            AttendanceRecord.date <= sun).all()}
+
+        def _hrs(r):
+            try:
+                if r and r.check_in and r.check_out:
+                    a = datetime.strptime(r.check_in, "%H:%M")
+                    b = datetime.strptime(r.check_out, "%H:%M")
+                    return max((b - a).total_seconds() / 3600.0, 0.0)
+            except (ValueError, TypeError):
+                return 0.0
+            return 0.0
+
+        vals = [_hrs(recs.get(d)) for d in week_dates]
+        total_min = int(round(sum(vals) * 60))
+        week_total = f"{total_min // 60}h {total_min % 60:02d}m worked"
+        fmt = lambda v: f"{v:.1f}h"  # noqa: E731
+    else:
+        counts = dict(db.session.query(
+            AttendanceRecord.date,
+            func.count(func.distinct(AttendanceRecord.user_id))).filter(
+            AttendanceRecord.user_id.in_(scope_ids),
+            AttendanceRecord.date >= mon, AttendanceRecord.date <= sun,
+            AttendanceRecord.status.in_(("present", "late")))
+            .group_by(AttendanceRecord.date).all())
+        vals = [counts.get(d, 0) for d in week_dates]
+        week_total = f"{sum(vals)} present-days this week"
+        fmt = lambda v: f"{v:g}"  # noqa: E731
+    maxv = max(vals) if vals else 0
+    week_bars = [{"dow": d.strftime("%a"), "date": d.day,
+                  "is_today": d == today,
+                  "h": round(v / maxv * 100, 1) if maxv else 0,
+                  "label": fmt(v) if maxv and v == maxv else None}
+                 for d, v in zip(week_dates, vals)]
+    week = {"bars": week_bars, "total": week_total}
+
+    # ---- "Today" tracker ring
+    punches_today = PunchRecord.query.filter_by(
+        user_id=u.id, local_date=today)\
+        .order_by(PunchRecord.punched_at).all()
+    last_punch = punches_today[-1] if punches_today else None
+    punched_in = bool(last_punch and last_punch.punch_type == "in")
+    worked_min = 0.0
+    open_in = None
+    for p in punches_today:
+        if p.punch_type == "in" and open_in is None:
+            open_in = p.punched_at
+        elif p.punch_type == "out" and open_in is not None:
+            worked_min += max((p.punched_at - open_in).total_seconds()
+                              / 60.0, 0.0)
+            open_in = None
+    if open_in is not None:  # still checked in — count up to now
+        worked_min += max((datetime.utcnow() - open_in).total_seconds()
+                          / 60.0, 0.0)
+
+    RING_R = 54
+    RING_C = 2 * 3.14159265358979 * RING_R
+    if role == "employee":
+        ra_today = RosterAssignment.query.filter_by(
+            user_id=u.id, date=today).first()
+        shift_min = shift_label = None
+        if (ra_today and ra_today.shift and ra_today.shift.start_time
+                and ra_today.shift.end_time):
+            try:
+                shh, shm = map(int, ra_today.shift.start_time.split(":"))
+                ehh, ehm = map(int, ra_today.shift.end_time.split(":"))
+                shift_min = (ehh * 60 + ehm) - (shh * 60 + shm)
+                if shift_min <= 0:
+                    shift_min += 24 * 60  # night shift crosses midnight
+                shift_label = (f"{ra_today.shift.start_time} – "
+                               f"{ra_today.shift.end_time}")
+            except (ValueError, AttributeError):
+                shift_min = shift_label = None
+        frac = min(worked_min / shift_min, 1.0) if shift_min else 0.0
+        center = f"{int(worked_min // 60)}:{int(worked_min % 60):02d}"
+        cap = "worked today"
+        if punched_in and shift_label:
+            sub = f"Checked in · shift {shift_label}"
+        elif shift_label:
+            sub = f"Shift {shift_label}"
+        else:
+            sub = "No rostered shift today"
+    else:
+        expected = User.query.filter(
+            User.id.in_(scope_ids), User.is_active.is_(True)).count()
+        frac = (present_today_n / expected) if expected else 0.0
+        center = f"{present_today_n}/{expected}"
+        cap = "present"
+        sub = "Team checked in today"
+    tracker = {"ring_c": round(RING_C, 2),
+               "ring_offset": round(RING_C * (1 - frac), 2),
+               "pct": round(frac * 100, 1),
+               "center": center, "cap": cap, "sub": sub,
+               "date_label": today.strftime("%d %b")}
+
+    punch_disabled = get_setting("mobile_checkin", "1") != "1"
+    punch = {"url": url_for("engagement.punch_page"),
+             "label": "Check Out" if punched_in else "Check In",
+             "pulse": (not punched_in) and not punch_disabled,
+             "disabled": punch_disabled}
+
+    # ---- "My tasks" dark card: done/(done+open) over inbox items
+    d_appr = ApprovalAction.query.filter(
+        ApprovalAction.actor_id == u.id,
+        ApprovalAction.action.in_(("approve", "reject")),
+        ApprovalAction.created_at >= window_30dt).count()
+    now_utc = datetime.utcnow()
+    mand_q = Notice.query.filter_by(requires_ack=True).filter(
+        (Notice.expires_at.is_(None)) | (Notice.expires_at > now_utc))
+    if not u.is_admin:
+        mand_q = mand_q.filter(
+            (Notice.audience == "all")
+            | (Notice.audience == (u.department or "")))
+    d_not = max(mand_q.count() - n_not, 0)
+    open_jd_ids = {j["jd"].id for j in tasks["jds"] if j.get("jd")}
+    done_jd_ids = set()
+    for ack in JDAcknowledgement.query.filter_by(user_id=u.id).all():
+        jd = JobDescription.query.get(ack.jd_id)
+        if (jd and jd.is_active and ack.status == "acknowledged"
+                and ack.jd_version >= jd.version
+                and ack.jd_id not in open_jd_ids):
+            done_jd_ids.add(ack.jd_id)
+    d_jd = len(done_jd_ids)
+    d_tr = len(passed_assigns)
+    d_mine = LeaveRequest.query.filter(
+        LeaveRequest.user_id == u.id,
+        LeaveRequest.status.in_(("approved", "rejected")),
+        LeaveRequest.decided_at >= window_30dt).count()
+    d_mine += _RR.query.filter(
+        _RR.user_id == u.id,
+        _RR.status.in_(("approved", "rejected")),
+        _RR.decided_at >= window_30dt).count()
+    d_mine += _LR.query.filter(
+        _LR.user_id == u.id,
+        _LR.status.in_(("ready", "delivered", "rejected")),
+        _LR.updated_at >= window_30dt).count()
+    done_n = d_appr + d_not + d_jd + d_tr + d_mine
+    open_n = n_appr + n_not + n_jd + n_tr + n_mine
+    tasks_pct = (round(done_n / (done_n + open_n) * 100, 1)
+                 if (done_n + open_n) else None)
+
+    def _plural(n, word):
+        return f"{n} {word}" + ("" if n == 1 else "s")
+
+    first_appr_link = (tasks["approvals"][0]["link"] if tasks["approvals"]
+                       else url_for("views.approvals"))
+    first_not_link = (url_for("engagement.notice_view",
+                              nid=tasks["notices"][0].id) if tasks["notices"]
+                      else url_for("engagement.notifications"))
+    task_rows = [
+        {"icon": "check", "title": "Approvals awaiting me",
+         "sub": (_plural(n_appr, "item") + " waiting on your decision"
+                 if n_appr else "Nothing waiting — you're all caught up"),
+         "open_n": n_appr, "link": first_appr_link},
+        {"icon": "bell", "title": "Mandatory notices to read",
+         "sub": (_plural(n_not, "notice") + " need your acknowledgement"
+                 if n_not else "All notices acknowledged"),
+         "open_n": n_not, "link": first_not_link},
+        {"icon": "file", "title": "JD to sign",
+         "sub": (_plural(n_jd, "job description") + " awaiting signature"
+                 if n_jd else "All job descriptions signed"),
+         "open_n": n_jd, "link": url_for("engagement.my_jd")},
+        {"icon": "graduation", "title": "Training to pass",
+         "sub": (_plural(n_tr, "course") + " assigned to you"
+                 if n_tr else "All assigned training complete"),
+         "open_n": n_tr, "link": url_for("engagement.my_training")},
+        {"icon": "clipboard", "title": "My pending requests",
+         "sub": (_plural(n_mine, "request") + " in flight"
+                 if n_mine else "No requests in flight"),
+         "open_n": n_mine, "link": url_for("extras.inbox")},
+    ]
+    visa20 = []
+    if role == "admin":
+        visa20 = get_upcoming_expiries(20)
+        task_rows.append(
+            {"icon": "idcard", "title": "Visa expiries · 20 days",
+             "sub": (_plural(len(visa20), "document")
+                     + " expiring soon" if visa20
+                     else "No documents expiring in the next 20 days"),
+             "open_n": len(visa20), "link": url_for("hrms.compliance")})
+    tasks_card = {"pct": tasks_pct,
+                  "pct_display": f"{tasks_pct:g}%" if tasks_pct is not None
+                  else "—",
+                  "done": done_n, "open": open_n,
+                  "rows": task_rows}
+
+    # ---- accordions (left column)
+    accordions = []
+    if role == "employee":
+        bal_rows = []
+        for b in _LB.query.filter_by(user_id=u.id).all():
+            if b.leave_type == "sick":
+                continue  # v3.3: sick balance hidden from employees
+            label = app_config.LEAVE_TYPES.get(
+                b.leave_type, {}).get("label", b.leave_type)
+            bal_rows.append({"t": label,
+                             "s": f"{(b.entitled or 0) - (b.used or 0):g} "
+                                  "days remaining"})
+        accordions.append({"title": "My leave balances", "icon": "calendar",
+                           "rows": bal_rows,
+                           "empty": "No leave balances on file",
+                           "view_all": {"label": "View all",
+                                        "url": url_for("views.leave")}})
+        doc_rows = []
+        for d in EmployeeDocument.query.filter_by(
+                user_id=u.id, superseded=False).all():
+            days_left = ((d.expiry_date - today).days
+                         if d.expiry_date else None)
+            doc_rows.append({
+                "t": d.title,
+                "s": (f"Expires {d.expiry_date.strftime('%d %b %Y')} · "
+                      f"{days_left}d left" if days_left is not None
+                      else "No expiry date"),
+                "warn": days_left is not None and days_left <= 60})
+        doc_rows.sort(key=lambda r: (not r["warn"], r["t"]))
+        accordions.append({"title": "My documents", "icon": "file",
+                           "rows": doc_rows,
+                           "empty": "No documents on file",
+                           "view_all": {"label": "View all",
+                                        "url": url_for("docs.my_documents")}})
+        pay_rows = []
+        yy, mm = today.year, today.month
+        for _ in range(3):
+            pay_rows.append({
+                "t": f"{calmod.month_name[mm]} {yy}",
+                "s": "Salary slip",
+                "link": url_for("views.payslip", year=yy, month=mm),
+                "link_label": "View"})
+            mm -= 1
+            if mm == 0:
+                mm, yy = 12, yy - 1
+        accordions.append({"title": "My payslips", "icon": "money",
+                           "rows": pay_rows,
+                           "empty": "No payslips yet",
+                           "view_all": {"label": "View all",
+                                        "url": url_for("views.payslips")}})
+    else:
+        exp = get_upcoming_expiries(60)
+        if role == "manager":
+            exp = [e for e in exp
+                   if (e["user"].department or "") in manager_depts]
+        visa_rows = [{
+            "t": e["user"].name,
+            "s": (f"{e['doc'].title()} · expires "
+                  f"{e['date'].strftime('%d %b %Y')} · "
+                  f"{e['days_left']}d left"),
+            "warn": True,
+            "initials": "".join(
+                w[0] for w in (e["user"].name or "?").split()[:2]).upper()}
+            for e in exp[:15]]
+        accordions.append({"title": "Expiring visas", "icon": "idcard",
+                           "rows": visa_rows,
+                           "empty": "No documents expiring in 60 days",
+                           "view_all": {"label": "View all",
+                                        "url": url_for("hrms.compliance")}})
+        cert_q = Certification.query.filter(
+            Certification.expiry_date.isnot(None),
+            Certification.expiry_date >= today - timedelta(days=30),
+            Certification.expiry_date <= today + timedelta(days=60))
+        if role == "manager":
+            cert_q = cert_q.filter(Certification.user_id.in_(scope_ids))
+        certs = cert_q.order_by(Certification.expiry_date).limit(15).all()
+        cert_users = {x.id: x for x in User.query.filter(
+            User.id.in_({c.user_id for c in certs})).all()} if certs else {}
+        cert_rows = []
+        for c in certs:
+            cu = cert_users.get(c.user_id)
+            days_left = (c.expiry_date - today).days
+            cert_rows.append({
+                "t": c.name,
+                "s": (f"{cu.name if cu else c.user_id} · expires "
+                      f"{c.expiry_date.strftime('%d %b %Y')} · "
+                      f"{days_left}d left"),
+                "warn": days_left <= 60})
+        accordions.append({"title": "Expiring certifications",
+                           "icon": "medal",
+                           "rows": cert_rows,
+                           "empty": "No certifications expiring in 60 days",
+                           "view_all": {"label": "View all",
+                                        "url": url_for(
+                                            "retail.certifications")}})
+        open_tickets = HelpdeskTicket.query.filter(
+            HelpdeskTicket.status.in_(("open", "in_progress"))).order_by(
+            HelpdeskTicket.created_at.desc()).limit(10).all()
+        req_users = {x.id: x for x in User.query.filter(
+            User.id.in_({t.requester_id for t in open_tickets})).all()
+        } if open_tickets else {}
+        ticket_rows = [{
+            "t": t.subject,
+            "s": (f"#{t.id} · "
+                  f"{req_users.get(t.requester_id).name if req_users.get(t.requester_id) else t.requester_id} · "
+                  f"{t.status.replace('_', ' ')}"),
+            "link": url_for("helpdesk.hr_ticket_detail", ticket_id=t.id),
+            "link_label": "Open"} for t in open_tickets]
+        accordions.append({"title": "Open tickets", "icon": "chat",
+                           "rows": ticket_rows,
+                           "empty": "No open tickets",
+                           "view_all": {"label": "View all",
+                                        "url": url_for(
+                                            "helpdesk.hr_tickets")}})
+
+    # ---- calendar: current week Mon–Sat, approved-leave chips
+    sat = mon + timedelta(days=5)
+    pm, py = (12, today.year - 1) if today.month == 1 else (today.month - 1,
+                                                             today.year)
+    nm, ny = (1, today.year + 1) if today.month == 12 else (today.month + 1,
+                                                           today.year)
+    month_chips = [calmod.month_name[pm], calmod.month_name[today.month],
+                   calmod.month_name[nm]]
+    if role == "employee":
+        cal_ids = ([x.id for x in User.query.filter_by(
+            is_active=True, department=u.department).all()]
+            if u.department else [u.id])
+    else:
+        cal_ids = scope_ids
+    if not cal_ids:
+        cal_ids = ["__none__"]
+    cal_leaves = LeaveRequest.query.filter(
+        LeaveRequest.user_id.in_(cal_ids),
+        LeaveRequest.status == "approved",
+        LeaveRequest.start_date <= sat,
+        LeaveRequest.end_date >= mon).all()
+    cal_users = {x.id: x for x in User.query.filter(
+        User.id.in_({l.user_id for l in cal_leaves})).all()
+    } if cal_leaves else {}
+    cal_days = []
+    for i in range(6):
+        d = mon + timedelta(days=i)
+        chips = []
+        for l in cal_leaves:
+            if l.start_date <= d <= l.end_date:
+                cu = cal_users.get(l.user_id)
+                nm_ = cu.name if cu else l.user_id
+                chips.append({
+                    "initials": "".join(
+                        w[0] for w in nm_.split()[:2]).upper(),
+                    "name": nm_})
+        chips.sort(key=lambda c: c["name"])
+        cal_days.append({"dow": d.strftime("%a"), "date": d.day,
+                         "is_today": d == today, "chips": chips})
+    calendar = {"months": month_chips, "days": cal_days,
+                "has": any(d["chips"] for d in cal_days),
+                "url": url_for("extras.team_calendar")}
+
+    return render_template(
+        "dashboard.html",
+        role=role, greet_name=greet_name, today_label=today_label,
+        dept_line=" · ".join(x for x in
+                             [u.designation, u.department] if x),
+        kpi_bars=kpi_bars, kpi_nums=kpi_nums,
+        profile=profile, week=week, tracker=tracker, punch=punch,
+        tasks_card=tasks_card, accordions=accordions, calendar=calendar)
 
 # ---------------- Leave ----------------
 @views_bp.route("/leave", methods=["GET", "POST"])

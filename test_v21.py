@@ -205,11 +205,15 @@ check("viewport meta correct",
       b'content="width=device-width, initial-scale=1, viewport-fit=cover"' in r.data)
 check("bottom nav markup present",
       b'class="bottomnav"' in r.data and b"Home" in r.data and b"Profile" in r.data)
-# v3.7: the home quick-access grid is now the .tile-grid component
-# (the old .tiles class survives only as a CSS grid alias, not in markup).
-check("dashboard quick-access tiles present", b'class="tile-grid"' in r.data)
+# v3.8: the home quick-access tile grid was replaced by the KPI strip +
+# widget cards (the /apps page keeps the grouped tile grid).
+check("dashboard KPI strip present", b'class="kpi-strip"' in r.data)
 check("drawer JS included", b"app.js" in r.data)
-check("tables wrapped in scroll containers", b"tbl-wrap" in r.data)
+# v3.8: the dashboard no longer renders tables; the scroll-container
+# convention is asserted on the employee leave page instead.
+r = client.get("/leave")
+check("tables wrapped in scroll containers",
+      r.status_code == 200 and b"tbl-wrap" in r.data)
 
 print(f"\n{len(passed)} passed, {len(failed)} failed")
 if failed:

@@ -70,6 +70,9 @@
       if (document.body.classList.contains("drawer-open")) { closeDrawer(); }
       else { openDrawer(); }
     });
+    // v3.8: the "More" pill-nav item opens the same drawer.
+    var more = $("moreOpen");
+    if (more) { more.addEventListener("click", openDrawer); }
     if (closeBtn) { closeBtn.addEventListener("click", closeDrawer); }
     if (scrim) { scrim.addEventListener("click", closeDrawer); }
     // Close on any drawer link click (PJAX navigation follows).

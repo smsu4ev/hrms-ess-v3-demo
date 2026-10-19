@@ -113,10 +113,12 @@ with app.app_context():
 login("T33-E1", "pw-T33-E1")
 r = client.get("/")
 check("dashboard 200", r.status_code == 200)
+# v3.8: leave balances moved to the "My leave balances" accordion
+# (acc-t label "Annual Leave"); sick stays hidden from employees.
 check("dashboard leave balances show annual",
-      b">Annual<" in r.data)
+      b"Annual Leave" in r.data)
 check("dashboard does NOT show a sick balance row",
-      b">Sick<" not in r.data)
+      b"Sick Leave" not in r.data)
 r = client.get("/leave")
 check("leave page 200", r.status_code == 200)
 check("leave page still lists sick leave type for applications",
@@ -295,10 +297,11 @@ check("HR page shows ack counts header", b"Acknowledged:" in r.data)
 logout()
 login("T33-E1", "pw-T33-E1")
 r = client.get("/")
-# v3.7: the home "Latest notice" card badges mandatory reads
-# ("Mandatory read") instead of the old "Action needed" label.
+# v3.8: the home "Latest notice" card is gone; mandatory reads now surface
+# as the "Mandatory notices to read" row on the dark tasks card.
 check("dashboard flags unacknowledged mandatory notice",
-      b"T33 Mandatory Notice" in r.data and b"Mandatory read" in r.data)
+      b"Mandatory notices to read" in r.data
+      and b"1 notice" in r.data)
 r = client.get(f"/notices/{nid}")
 check("notice view 200", r.status_code == 200)
 check("notice view shows Acknowledge action",
@@ -314,8 +317,9 @@ with app.app_context():
                                      user_id="T33-E1").count()
     check("ack recorded exactly once", acks == 1, f"got {acks}")
 r = client.get("/")
+# v3.8: after ack the tasks row reads "All notices acknowledged".
 check("dashboard no longer flags after ack",
-      b"Action needed" not in r.data)
+      b"All notices acknowledged" in r.data)
 logout()
 login("T33-ADM", "pw-T33-ADM")
 r = client.get("/hrms/notices")

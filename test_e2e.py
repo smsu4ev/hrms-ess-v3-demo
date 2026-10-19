@@ -68,9 +68,9 @@ r = client.post("/change-password",
                 data={"current_password": pw_admin, "new_password": "StrongPass1",
                       "confirm_password": "StrongPass1", "csrf_token": t},
                 follow_redirects=True)
-# v3.7: home greeting is "Good <part of day>, <first name>" (not "Welcome, ...").
+# v3.8: home greeting is "Welcome in, <first name>" (not "Good <part of day>, ...").
 check("password changed -> dashboard",
-      r.status_code == 200 and b"Good " in r.data, r.status_code)
+      r.status_code == 200 and b"Welcome in," in r.data, r.status_code)
 
 # 5. Dashboard renders
 check("dashboard ok", r.status_code == 200)

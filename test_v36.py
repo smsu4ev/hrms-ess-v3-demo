@@ -115,9 +115,9 @@ r = client.get("/")
 check("admin dashboard 200", r.status_code == 200)
 check("admin drawer renders with groups",
       b'class="drawer"' in r.data and b'class="d-group"' in r.data)
-check("admin topbar has Home + All Services links",
-      b">Home<" in r.data and b">All Services<" in r.data)
-check("admin topbar has My Team link", b">My Team<" in r.data)
+check("admin pill nav has Dashboard + People links",
+      b">Dashboard<" in r.data and b">People<" in r.data)
+check("admin pill nav has Payroll", b">Payroll<" in r.data)
 r = client.get("/ws/hr-setup")
 check("drawer shows current workspace groups",
       b">Masters<" in r.data and b"Settings &amp; Audit" in r.data)
@@ -132,7 +132,8 @@ check("employee dashboard 200", r.status_code == 200)
 check("employee drawer renders", b'class="drawer"' in r.data)
 check("employee drawer hides admin workspaces",
       b"/ws/payroll" not in r.data and b"/ws/hr-setup" not in r.data)
-check("employee topbar hides My Team link", b">My Team<" not in r.data)
+check("employee pill nav hides Payroll/Approvals",
+      b">Payroll<" not in r.data and b">Approvals<" not in r.data)
 check("employee drawer hides HR Settings", b"HR Settings" not in r.data)
 r = client.get("/ws/me")
 check("employee drawer shows Me workspace groups",
@@ -143,7 +144,7 @@ logout()
 login("T36-MGR", "pw-T36-MGR")
 r = client.get("/")
 check("manager dashboard 200", r.status_code == 200)
-check("manager topbar has My Team link", b">My Team<" in r.data)
+check("manager pill nav has Approvals", b">Approvals<" in r.data)
 check("manager drawer hides Payroll workspace", b"/ws/payroll" not in r.data)
 logout()
 
@@ -344,7 +345,7 @@ _mobile = _css[_media_at:] if _media_at > 0 else ""
 check("bottomnav enabled inside mobile media query",
       ".bottomnav { display: flex" in _mobile)
 r = client.get("/ws/me")
-check("pages link the bumped stylesheet v=9", b"style.css?v=9" in r.data)
+check("pages link the bumped stylesheet v=10", b"style.css?v=10" in r.data)
 
 print()
 print(f"V3.6: {len(passed)} passed, {len(failed)} failed")

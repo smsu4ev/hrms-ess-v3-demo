@@ -1,20 +1,25 @@
 """HRMS+ESS v3.7 tests: App-UI shell (top bar + drawer), home, animations.
 
-Covers V37-APP-UI-SPEC.md acceptance:
-1. Shell markup: no .rail / .ws-sidebar classes; top bar has hamburger,
-   search opener, bell and avatar menu; desktop text links (Home, All
-   Services; My Team for managers/admins only).
+Covers V37-APP-UI-SPEC.md acceptance (v3.8: shell + home markup updated):
+1. Shell markup: no .rail / .ws-sidebar classes; top bar has hamburger
+   (iconbtn-hamburger), search opener, bell and avatar menu; pill nav
+   (Dashboard, People, Attendance, Calendar, More; Payroll for admins,
+   Approvals for managers/admins) — the v3.7 desktop text links were
+   removed in v3.8.
 2. Drawer: renders role-filtered groups from the workspaces registry;
    admin sees the HR Settings link, a plain employee does not.
-3. Home tiles per role: employee sees Check In/Out + Apply Leave and no
-   Payroll; admin sees Payroll; manager sees an Approvals tile carrying
-   the pending-approval badge (> 0).
-4. count-up [data-count] present on the manager/admin hero; animation CSS
-   present (@keyframes tile-rise, .pjax-enter) plus a
+3. Home per role (v3.8 dashboard rebuild): "Welcome in, <first name>"
+   greeting; KPI strip; profile card; punch button; dark tasks card
+   ("My tasks"); employee pill nav has no Payroll/Approvals; admin pill
+   nav has Payroll + settings gear; manager pill nav has Approvals with
+   the pending badge.
+4. count-up [data-count] present on the manager/admin KPI numbers;
+   animation CSS present (@keyframes tile-rise, .pjax-enter) plus a
    prefers-reduced-motion block; .bottomnav base display:none rule intact
    before the <=860px media query (V3.6.2 regression guard).
 5. /apps renders grouped tiles per area.
 6. Every /ws/<key> home returns 200 for admin.
+7. Asset versions: style.css?v=10, app.js?v=5, desk.js?v=3 (v3.8 bump).
 
 Uses an isolated temp SQLite DB and test fixtures only (no real employee data).
 Run: rm -f /tmp/test_v37.db && ESS_SECRET_KEY=testsecret12345 \\
@@ -75,8 +80,8 @@ def mk(uid, name, role, dept, **kw):
 
 
 def topbar_links(html):
-    """The desktop text-link block of the top bar only."""
-    m = re.search(rb'<nav class="topbar-links".*?</nav>', html, re.S)
+    """The pill-nav block of the top bar only (v3.8: .topbar-links removed)."""
+    m = re.search(rb'<nav class="pillnav".*?</nav>', html, re.S)
     return m.group(0) if m else b""
 
 
@@ -105,7 +110,7 @@ check("no .rail class in shell markup", b'class="rail"' not in r.data)
 check("no .ws-sidebar class in shell markup",
       b'class="ws-sidebar"' not in r.data)
 check("top bar has hamburger", b'id="navToggle"' in r.data
-      and b'class="hamburger"' in r.data)
+      and b'iconbtn-hamburger' in r.data)
 check("top bar has search opener", b'id="awesomeOpen"' in r.data)
 check("top bar has notifications bell", b'id="notifOpen"' in r.data)
 check("top bar has avatar menu",
@@ -114,9 +119,12 @@ check("avatar menu has My Profile", b">My Profile<" in r.data)
 check("avatar menu has Theme", b">Theme<" in r.data)
 check("avatar menu has HR Settings (admin)", b">HR Settings<" in r.data)
 tb = topbar_links(r.data)
-check("topbar text link: Home", b">Home<" in tb)
-check("topbar text link: All Services", b">All Services<" in tb)
-check("topbar text link: My Team (admin)", b">My Team<" in tb)
+check("pill nav: Dashboard", b">Dashboard<" in tb)
+check("pill nav: People", b">People<" in tb)
+check("pill nav: Attendance", b">Attendance<" in tb)
+check("pill nav: Calendar", b">Calendar<" in tb)
+check("pill nav: More", b">More<" in tb)
+check("pill nav: Payroll (admin)", b">Payroll<" in tb)
 
 # ================= 2) drawer: role-filtered groups =================
 check("drawer renders", b'id="drawer"' in r.data
@@ -132,9 +140,10 @@ logout()
 login("EMP001", "pw-EMP001")
 r = client.get("/")
 tb = topbar_links(r.data)
-check("employee topbar shows Home + All Services",
-      b">Home<" in tb and b">All Services<" in tb)
-check("employee topbar hides My Team", b">My Team<" not in tb)
+check("employee pill nav shows Dashboard",
+      b">Dashboard<" in tb)
+check("employee pill nav hides Payroll", b">Payroll<" not in tb)
+check("employee pill nav hides Approvals", b">Approvals<" not in tb)
 check("employee drawer renders", b'id="drawer"' in r.data)
 check("employee drawer hides HR Settings", b"HR Settings" not in r.data)
 logout()
@@ -142,45 +151,49 @@ logout()
 login("MGR001", "pw-MGR001")
 r = client.get("/")
 tb = topbar_links(r.data)
-check("manager topbar shows My Team", b">My Team<" in tb)
+check("manager pill nav shows Approvals", b">Approvals<" in tb)
 logout()
 
-# ================= 3) home tiles per role =================
+# ================= 3) home per role (v3.8 dashboard) ====================
 login("EMP001", "pw-EMP001")
 r = client.get("/")
 check("employee home 200", r.status_code == 200)
 check("employee greeting shows first name",
-      re.search(rb"Good (morning|afternoon|evening), T37", r.data)
-      is not None)
-check("employee sees Check In/Out tile", b"Check In/Out" in r.data)
-check("employee sees Apply Leave tile", b"Apply Leave" in r.data)
-check("tiles use tinted icon chips", b'class="t-chip ' in r.data)
-check("employee has no Payroll tile", b">Payroll<" not in r.data)
+      b"Welcome in, T37" in r.data)
+check("employee sees punch button", b">Check In<" in r.data)
+check("employee sees KPI strip", b'class="kpi-strip"' in r.data)
+check("employee sees profile card",
+      b'class="card profile-card mord-profile"' in r.data)
+check("employee sees dark tasks card",
+      b'class="card tasks-dark mord-tasks"' in r.data)
+check("employee has no Payroll pill",
+      b">Payroll<" not in topbar_links(r.data))
 logout()
 
 login("HRADMIN", "pw-HRADMIN")
 r = client.get("/")
 check("admin home 200", r.status_code == 200)
-check("admin sees Payroll tile", b">Payroll<" in r.data)
-check("admin sees HR Settings tile", b">HR Settings<" in r.data)
-check("admin hero has count-up stats", b"data-count" in r.data)
-check("admin hero shows pending approvals",
+check("admin sees Payroll pill",
+      b">Payroll<" in topbar_links(r.data))
+check("admin sees settings gear", b"iconbtn-settings" in r.data)
+check("admin KPI numbers have count-up stats", b"data-count" in r.data)
+check("admin dashboard shows pending approvals",
       b"Pending approvals" in r.data)
 logout()
 
 login("MGR001", "pw-MGR001")
 r = client.get("/")
 check("manager home 200", r.status_code == 200)
-check("manager sees Approvals tile", b">Approvals<" in r.data)
-m = re.search(rb'class="t-lbl">Approvals</span>\s*'
-              rb'<div class="t-sub">.*?</div>\s*'
-              rb'<span class="t-badge">(\d+)</span>', r.data, re.S)
-check("manager Approvals tile badge > 0",
+check("manager sees Approvals pill", b">Approvals<" in topbar_links(r.data))
+m = re.search(rb">Approvals<span class=\"badge\">(\d+)</span>",
+              topbar_links(r.data))
+check("manager Approvals pill badge > 0",
       m is not None and int(m.group(1)) > 0,
       f"badge={m.group(1).decode() if m else 'none'}")
-check("manager hero has count-up stats", b"data-count" in r.data)
-check("manager hero shows team counts",
-      b"Present today" in r.data and b"On leave" in r.data)
+check("manager sees My tasks card", b">My tasks<" in r.data)
+check("manager KPI numbers have count-up stats", b"data-count" in r.data)
+check("manager dashboard shows team counts",
+      b"Team present today" in r.data and b"On leave today" in r.data)
 logout()
 
 # ================= 4) animation CSS + bottomnav regression guard =====
@@ -230,9 +243,9 @@ logout()
 # ================= 7) asset versions bumped =================
 login("HRADMIN", "pw-HRADMIN")
 r = client.get("/")
-check("pages link the bumped stylesheet v=9", b"style.css?v=9" in r.data)
-check("pages link app.js v=4", b"app.js?v=4" in r.data)
-check("pages link desk.js v=2", b"desk.js?v=2" in r.data)
+check("pages link the bumped stylesheet v=10", b"style.css?v=10" in r.data)
+check("pages link app.js v=5", b"app.js?v=5" in r.data)
+check("pages link desk.js v=3", b"desk.js?v=3" in r.data)
 logout()
 
 print()
